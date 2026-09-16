@@ -1,4 +1,4 @@
-import {readFile,readdir,readFileSync} from 'node:fs/promises';
+import {readFile,readdir} from 'node:fs/promises';
 import {existsSync,readFileSync as readSync} from 'node:fs';
 import path from 'node:path';
 import yaml from 'yaml';
