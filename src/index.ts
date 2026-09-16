@@ -1,6 +1,5 @@
 export * from './types.js';
 export * from './scenarios.js';
-export * from './scenario-pack.js';
 export * from './tool-catalog.js';
 export * from './dimensions.js';
 export * from './profiles.js';
