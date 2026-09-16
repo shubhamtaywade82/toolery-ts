@@ -1,6 +1,6 @@
 {
-  "name":"toolery-ts","version":"0.3.0","description":"Deterministic tool-calling benchmark for LLM endpoints","type":"module","main":"dist/index.js","types":"dist/index.d.ts","bin":{"toolery":"dist/cli.js"},"files":["dist","README.md","LICENSE","BENCHMARK.md"],
+  "name":"toolery-ts","version":"0.4.0","description":"Deterministic tool-calling benchmark for LLM endpoints","type":"module","main":"dist/index.js","types":"dist/index.d.ts","bin":{"toolery":"dist/cli.js"},"files":["dist","README.md","LICENSE","BENCHMARK.md","vendor/toolery-upstream"],
   "scripts":{"build":"tsc -p tsconfig.json","dev":"tsx src/cli.tsx","start":"npm run build && node dist/cli.js","test":"node --test --import tsx tests/**/*.test.ts","typecheck":"tsc -p tsconfig.json --noEmit","lint":"eslint src tests","clean":"rm -rf dist","pack:check":"npm run build && npm pack --dry-run","sync:upstream":"node scripts/sync-upstream-scenarios.mjs"},
-  "keywords":["llm","benchmark","tool-calling","agentic","typescript","ink","cli","ollama"],"author":"Shubham Taywade","license":"MIT","engines":{"node":">=20"},"dependencies":{"ink":"^7.1.1","meow":"^14.1.0","react":"^19.3.0","yaml":"^2.8.1"},
+  "keywords":["llm","benchmark","tool-calling","agentic","typescript","ink","cli","ollama","evaluation"],"author":"Shubham Taywade","license":"MIT","engines":{"node":">=20"},"dependencies":{"ink":"^7.1.1","meow":"^14.1.0","react":"^19.3.0","yaml":"^2.8.1"},
   "devDependencies":{"@types/node":"^24.5.0","@types/react":"^19.3.0","@typescript-eslint/eslint-plugin":"^8.43.0","@typescript-eslint/parser":"^8.43.0","eslint":"^9.35.0","tsx":"^4.20.5","typescript":"^5.9.2"},"publishConfig":{"access":"public"}
 }
