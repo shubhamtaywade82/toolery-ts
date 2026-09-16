@@ -1,0 +1,38 @@
+{
+  "name": "toolery-ts",
+  "version": "0.1.0",
+  "description": "Deterministic tool-calling benchmark for LLM endpoints",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "toolery": "dist/cli.js"
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.tsx",
+    "start": "node dist/cli.js",
+    "test": "node --test --import tsx tests/**/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src tests",
+    "clean": "rm -rf dist"
+  },
+  "keywords": ["llm", "benchmark", "tool-calling", "agentic", "typescript", "ink", "cli"],
+  "author": "Shubham Taywade",
+  "license": "MIT",
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "ink": "^7.1.1",
+    "meow": "^14.1.0",
+    "react": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.0",
+    "@types/react": "^19.1.12",
+    "@typescript-eslint/eslint-plugin": "^8.43.0",
+    "@typescript-eslint/parser": "^8.43.0",
+    "eslint": "^9.35.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}
