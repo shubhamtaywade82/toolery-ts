@@ -4,10 +4,10 @@ on:
   push:
     branches: [main]
     paths:
-      - "website/**"
-      - "src/**"
-      - "typedoc.json"
-      - ".github/workflows/docs.yml"
+      - 'website/**'
+      - 'src/**'
+      - 'typedoc.json'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
 permissions:
@@ -23,11 +23,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version: '24'
 
       - name: Install website dependencies
         working-directory: website
@@ -38,7 +40,7 @@ jobs:
         run: npm run build
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: website/.vitepress/dist
 
@@ -51,4 +53,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
