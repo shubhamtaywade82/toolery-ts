@@ -1,0 +1,3 @@
+import type {RunResult} from './types.js';
+import {mcnemar} from './statistics.js';
+export function compareRuns(a:RunResult[],b:RunResult[]){const byA=new Map(a.map(r=>[r.scenarioId,r]));const byB=new Map(b.map(r=>[r.scenarioId,r]));const ids=[...byA.keys()].filter(id=>byB.has(id));const av:boolean[]=[],bv:boolean[]=[];for(const id of ids){av.push((byA.get(id)?.successRate??0)>=1);bv.push((byB.get(id)?.successRate??0)>=1);}return{scenarioCount:ids.length,successRateA:av.filter(Boolean).length/Math.max(1,av.length),successRateB:bv.filter(Boolean).length/Math.max(1,bv.length),...mcnemar(av,bv)};}
