@@ -17,15 +17,6 @@ The default URL is `http://localhost:11434/v1`, which is convenient for Ollama's
 
 ```bash
 npm install
-a
-npm run build
-npm link
-```
-
-Remove the accidental `a` line if copying manually; the normal installation is:
-
-```bash
-npm install
 npm run build
 npm link
 ```
@@ -46,7 +37,7 @@ toolery scenarios
 toolery profiles
 ```
 
-For API authentication, set `TOOLERY_API_KEY` in the environment. Secrets are never included in serialized configuration.
+For API authentication, set `TOOLERY_API_KEY` in the environment. Secrets are not serialized into benchmark configuration.
 
 ## Architecture
 
@@ -68,7 +59,9 @@ The benchmark domain is intentionally separated from the terminal presentation l
 
 ## Current scope
 
-This repository contains a small, executable starter scenario pack. It does **not** yet claim to contain 143 production-quality benchmark scenarios. The 143-scenario target should be added as a versioned benchmark dataset with independently reviewable expected behavior.
+This repository contains a small, executable **starter** scenario pack. It does **not** claim to contain 143 production-quality benchmark scenarios. The 143-scenario target should be added as a versioned benchmark dataset with independently reviewable expected behavior.
+
+The current adapter sends prompts to an OpenAI-compatible chat endpoint. Full tool-schema/function-calling scenarios are a next architectural step because the benchmark should eventually provide actual tool definitions to the model and then validate multi-turn tool results.
 
 ## Development
 
@@ -81,8 +74,9 @@ npm run build
 ## Roadmap
 
 - Expand the benchmark dataset and scenario metadata.
-- Add tool schemas so the LLM receives actual tool definitions instead of only prompts.
+- Add tool schemas and actual tool definitions to model requests.
 - Add true multi-turn/tool-result scenarios for recovery and state tracking.
 - Add resumable JSON result files and CSV/JSON export.
 - Add endpoint health probing and controlled concurrency.
 - Add benchmark versioning and machine-readable result schemas.
+- Add additional adapters, including a native Ollama adapter when it provides benchmark-specific value.
