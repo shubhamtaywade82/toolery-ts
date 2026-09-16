@@ -26,15 +26,16 @@ The importer is pinned to upstream commit `36c8c0c217898aade7500fa13b02fdc4d5889
 - Profiles for coding, reasoning, agentic orchestration, safety/RAG, customer support, data analysis and local coding agents.
 - Concurrent execution with resumable JSON snapshots and persistent run history.
 - Tier-weighted reporting, stability statistics, 14-day time decay utility and paired McNemar comparison.
-- Six-tab Ink UI: Home, Rankings, Compare, Scenarios, History, Profiles.
+- Nine-tab Ink UI: Home, Scenarios, Run, Results, Rankings, Compare, Profiles, History, Settings.
 - Endpoint probing, CSV export and optional llama-benchy integration.
 - Explicit raw/cloud/mock/Hermes adapter contracts; Hermes remains a separate optional bridge because it depends on the external Hermes CLI/MCP runtime.
 
 ## CLI
 
 ```bash
-# Local Ollama / vLLM / llama.cpp style endpoint
-toolery run --model qwen3.5:4b --base-url http://localhost:11434/v1 --source synthetic --tier all --trials 3
+# Local Ollama / vLLM / llama.cpp style endpoint (run and tui are equivalent)
+toolery run --model qwen2.5:4b --base-url http://localhost:11434/v1 --source synthetic --tier all --trials 3
+toolery tui  --model qwen2.5:4b --base-url http://localhost:11434/v1
 
 # Exact upstream benchmark after sync
 npm run sync:upstream
