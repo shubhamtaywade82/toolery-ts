@@ -3,6 +3,7 @@ import {defineConfig} from 'vitepress';
 export default defineConfig({
   title: 'Toolery-TS',
   description: 'Deterministic tool-calling benchmark for LLM endpoints',
+  base: '/toolery-ts/',
   cleanUrls: true,
   lastUpdated: true,
   themeConfig: {
