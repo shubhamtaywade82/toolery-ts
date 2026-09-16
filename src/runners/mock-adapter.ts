@@ -16,7 +16,7 @@ export class ScriptedMockAdapter implements LlmAdapter {
     if(/repository status/i.test(user)){add('git_status',{});add('run_tests',/failing tests/i.test(user)?{filter:'failing'}:{});add('read_file',{path:'relevant'});}
     const docs=user.match(/docs for ([^.]+)/i);if(docs){add('search_docs',{query:docs[1].trim()});if(/read the relevant file/i.test(user))add('read_file',{path:'relevant'});if(/summarize/i.test(user))add('summarize',{format:/one sentence/i.test(user)?'one_sentence':'bullet_points'});}
     if(/account balance/i.test(user)){add('get_account_balance',{account:'primary'});if(/backup/i.test(user))add('get_account_balance',{account:'backup'});if(/summarize/i.test(user))add('summarize',{format:'one_sentence'});}
-    if(/weather and .*time/i.test(user)){calls.length=0;add('get_weather',{location:'Bengaluru',date:'today'});add('get_current_time',{timezone:'Asia/Kolkata'});add('summarize',{format:'one_sentence'});}
+    if(/weather and .*time/i.test(user)){calls.length=0;add('get_weather',{location:'Bengaluru',date:'today'});add('get_current_time',{timezone:'Asia/Kolkata'});if(/summarize/i.test(user))add('summarize',{format:'one_sentence'});}
     return{text:'',toolCalls:calls,durationMs:1,finishReason:calls.length?'tool_calls':'stop'};
   }
 }
