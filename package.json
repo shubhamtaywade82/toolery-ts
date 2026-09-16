@@ -5,8 +5,17 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "bin": {"toolery": "dist/cli.js"},
-  "files": ["dist", "README.md", "LICENSE", "BENCHMARK.md", "PARITY.md", "vendor/toolery-upstream"],
+  "bin": {
+    "toolery": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "BENCHMARK.md",
+    "PARITY.md",
+    "vendor/toolery-upstream"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli.tsx",
@@ -17,16 +26,43 @@
     "clean": "rm -rf dist",
     "pack:check": "npm run build && npm pack --dry-run",
     "sync:upstream": "node scripts/sync-upstream-scenarios.mjs",
-    "docs:install": "npm install --prefix docs",
-    "docs:dev": "npm run docs:dev --prefix docs",
-    "docs:build": "npm run docs:build --prefix docs",
-    "docs:preview": "npm run docs:preview --prefix docs"
+    "docs:install": "npm install --prefix website",
+    "docs:dev": "npm run dev --prefix website",
+    "docs:build": "npm run build --prefix website",
+    "docs:preview": "npm run preview --prefix website"
   },
-  "keywords": ["llm", "benchmark", "tool-calling", "agentic", "typescript", "ink", "cli", "ollama", "evaluation"],
+  "keywords": [
+    "llm",
+    "benchmark",
+    "tool-calling",
+    "agentic",
+    "typescript",
+    "ink",
+    "cli",
+    "ollama",
+    "evaluation"
+  ],
   "author": "Shubham Taywade",
   "license": "MIT",
-  "engines": {"node": ">=20"},
-  "dependencies": {"ink": "^7.1.1", "meow": "^14.1.0", "react": "^19.3.0", "yaml": "^2.8.1"},
-  "devDependencies": {"@types/node": "^24.5.0", "@types/react": "^19.3.0", "@typescript-eslint/eslint-plugin": "^8.43.0", "@typescript-eslint/parser": "^8.43.0", "eslint": "^9.35.0", "tsx": "^4.20.5", "typescript": "^5.9.2"},
-  "publishConfig": {"access": "public"}
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ink": "^7.1.1",
+    "meow": "^14.1.0",
+    "react": "^19.3.0",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.0",
+    "@types/react": "^19.3.0",
+    "@typescript-eslint/eslint-plugin": "^8.43.0",
+    "@typescript-eslint/parser": "^8.43.0",
+    "eslint": "^9.35.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }
