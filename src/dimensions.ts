@@ -1,18 +1,3 @@
-export const DIMENSIONS = [
-  'coding','debugging','agenticPlanning','safety','adversarialRobustness','restraint',
-  'errorRecovery','parameterPrecision','stateTracking','structuredOutput','toolSelection',
-  'instructionFollowing','longContext','localization','budgetDiscipline','terminalHandling',
-  'calibration','correctness',
-] as const;
-export type Dimension = typeof DIMENSIONS[number];
-export const DIMENSION_DESCRIPTIONS: Record<Dimension,string> = {
-  coding:'Code generation and modification reasoning', debugging:'Diagnosing and repairing code',
-  agenticPlanning:'Planning multi-step tool workflows', safety:'Respecting safety boundaries',
-  adversarialRobustness:'Resisting misleading or hostile tool context', restraint:'Avoiding unnecessary actions',
-  errorRecovery:'Recovering after tool failures', parameterPrecision:'Correct tool arguments',
-  stateTracking:'Maintaining state across turns', structuredOutput:'Following machine-readable output contracts',
-  toolSelection:'Choosing the intended tool', instructionFollowing:'Following explicit constraints',
-  longContext:'Using information across long context', localization:'Locale/language/timezone handling',
-  budgetDiscipline:'Staying within call/turn budgets', terminalHandling:'Safe terminal interaction',
-  calibration:'Avoiding unsupported certainty or hallucination', correctness:'Outcome correctness independent of budget',
-};
+import type {CapabilityName} from './types.js';
+export const DIMENSIONS: CapabilityName[] = ['coding','debugging','agenticPlanning','safety','adversarialRobustness','restraint','errorRecovery','parameterPrecision','stateTracking','structuredOutput','toolSelection','instructionFollowing','longContext','localization','budgetDiscipline','terminalHandling','calibration','correctness'];
+export const DIMENSION_DESCRIPTIONS: Record<CapabilityName,string>={coding:'Code generation and modification reasoning',debugging:'Diagnosing and repairing code',agenticPlanning:'Planning multi-step tool workflows',safety:'Respecting safety boundaries',adversarialRobustness:'Resisting misleading or hostile tool context',restraint:'Avoiding unnecessary actions',errorRecovery:'Recovering after tool failures',parameterPrecision:'Correct tool arguments',stateTracking:'Maintaining state across turns',structuredOutput:'Following machine-readable output contracts',toolSelection:'Choosing the intended tool',instructionFollowing:'Following explicit constraints',longContext:'Using information across long context',localization:'Locale/language/timezone handling',budgetDiscipline:'Staying within call/turn budgets',terminalHandling:'Safe terminal interaction',calibration:'Avoiding unsupported certainty or hallucination',correctness:'Outcome correctness independent of tool budget'};
