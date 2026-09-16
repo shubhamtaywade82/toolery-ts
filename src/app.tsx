@@ -1,27 +1,12 @@
-import React, {useMemo, useState} from 'react';
-import {Box, Text, useApp, useInput} from 'ink';
-import type {BenchmarkConfig, BenchmarkSummary, RunResult} from './types.js';
-import {loadScenarios} from './scenarios.js';
-import {BenchmarkService} from './benchmark.js';
-import {getProfile} from './profiles.js';
-import {formatSummary} from './export.js';
-
-export function App({config}: {config: BenchmarkConfig}) {
-  const {exit} = useApp();
-  const scenarios = useMemo(() => loadScenarios(config.tier === 'all' ? undefined : config.tier), [config.tier]);
-  const [results, setResults] = useState<RunResult[]>([]); const [running,setRunning]=useState(false); const [completed,setCompleted]=useState(0); const [error,setError]=useState<string>(); const [summary,setSummary]=useState<BenchmarkSummary>();
-  useInput((input,key)=>{ if(input==='q'||key.escape) exit(); if(input==='r'&&!running) void run(); });
-  async function run(){
-    setRunning(true); setResults([]); setCompleted(0); setError(undefined); setSummary(undefined);
-    try { const service=new BenchmarkService(config); const result=await service.run(scenarios,(count,_total,item)=>{setCompleted(count);setResults(prev=>[...prev,item]);}); setResults(result.results); setSummary(result.summary); }
-    catch(cause){setError(cause instanceof Error?cause.message:String(cause));} finally{setRunning(false);}
-  }
-  return <Box flexDirection="column" padding={1} width={108}>
-    <Box borderStyle="round" paddingX={2}><Text bold color="cyan">Toolery-TS</Text><Text> · deterministic tool-calling benchmark v{config.benchmarkVersion}</Text></Box>
-    <Box marginTop={1} flexDirection="column"><Text>Model: {config.model || '(endpoint default)'}</Text><Text>Endpoint: {config.baseUrl}</Text><Text>Tier: {config.tier} · Trials: {config.trials} · Scenarios: {scenarios.length} · Concurrency: {config.concurrency}</Text><Text>Profile: {getProfile(config.profile).id} · Status: {running ? `running ${completed}/${scenarios.length}` : 'ready'}</Text></Box>
-    {error && <Text color="red">Error: {error}</Text>}
-    {summary && <Box marginTop={1} flexDirection="column"><Text bold color="green">Benchmark complete</Text>{formatSummary(summary).split('\n').slice(2).map(line=><Text key={line}>{line}</Text>)}</Box>}
-    <Box marginTop={1} flexDirection="column"><Text bold>Recent scenarios</Text>{results.slice(-8).map(result=><Text key={result.scenarioId} color={result.successRate===1?'green':'yellow'}>{result.successRate===1?'✓':'·'} {result.scenarioId} {(result.successRate*100).toFixed(0)}% · {result.description}</Text>)}</Box>
-    <Box marginTop={1}><Text dimColor>[r] run · [q] quit · profile: {getProfile(config.profile).description}</Text></Box>
-  </Box>;
-}
+import React,{useMemo,useState}from'react';import{Box,Text,useApp,useInput,Spacer}from'ink';import type{BenchmarkConfig,BenchmarkSummary,RunResult}from'./types.js';import{loadScenarios}from'./scenarios.js';import{BenchmarkService}from'./benchmark.js';import{PROFILES,getProfile}from'./profiles.js';import{formatSummary}from'./export.js';import{appendHistory,loadHistory}from'./history.js';import{buildRanking}from'./rankings.js';
+const TABS=['Home','Rankings','Compare','Scenarios','History','Profiles'] as const;type Tab=typeof TABS[number];
+export function App({config}:{config:BenchmarkConfig}){const{exit}=useApp();const[tab,setTab]=useState<Tab>('Home');const scenarios=useMemo(()=>{process.env.TOOLERY_SOURCE=config.source;const s=loadScenarios(config.tier==='all'?undefined:config.tier);return config.category?s.filter(x=>x.category===config.category):s},[config]);const[results,setResults]=useState<RunResult[]>([]);const[running,setRunning]=useState(false);const[completed,setCompleted]=useState(0);const[error,setError]=useState<string>();const[history,setHistory]=useState<any[]>([]);const[summary,setSummary]=useState<BenchmarkSummary>();
+ useInput((input,key)=>{if(input==='q'||key.escape)exit();if(key.leftArrow)move(-1);if(key.rightArrow)move(1);if(input==='r'&&!running)void run();});function move(delta:number){const i=TABS.indexOf(tab);setTab(TABS[(i+delta+TABS.length)%TABS.length]);}
+ async function run(){setRunning(true);setResults([]);setCompleted(0);setError(undefined);setSummary(undefined);try{const service=new BenchmarkService(config);const result=await service.run(scenarios,(count,_total,item)=>{setCompleted(count);setResults(p=>[...p,item]);});setResults(result.results);setSummary(result.summary);const runId=`${Date.now()}-${Math.random().toString(36).slice(2,8)}`;await appendHistory({runId,startedAt:new Date().toISOString(),model:config.model,adapter:config.adapter,source:config.source,tier:config.tier,profile:config.profile,cluster:config.cluster,summary:result.summary,results:result.results});setHistory(await loadHistory());}catch(e){setError(e instanceof Error?e.message:String(e))}finally{setRunning(false)}}
+ const ranking=buildRanking(config.model||'(unknown)',config.adapter,config.cluster??'single',results);return <Box flexDirection="column"padding={1}width={120}><Box borderStyle="round"paddingX={2}><Text bold color="cyan">Toolery-TS</Text><Text> · {config.source} · v{config.benchmarkVersion}</Text><Spacer/><Text>{running?`RUN ${completed}/${scenarios.length}`:'READY'}</Text></Box><Box marginTop={1}borderStyle="single"paddingX={1}>{TABS.map(t=><Text key={t}bold={t===tab}>{t===tab?'[':''}{t}{t===tab?']':' '} </Text>)}</Box>{error&&<Text color="red">{error}</Text>}{tab==='Home'&&<Home config={config} scenarios={scenarios} results={results} summary={summary}/>} {tab==='Rankings'&&<Rankings ranking={ranking}/>} {tab==='Compare'&&<Compare results={results}/>} {tab==='Scenarios'&&<ScenarioList scenarios={scenarios}/>} {tab==='History'&&<History items={history}/>} {tab==='Profiles'&&<Profiles/>}<Box marginTop={1}><Text dimColor>[←/→] tabs · [r] run · [q] quit</Text></Box></Box>}
+function Home({config,scenarios,results,summary}:{config:BenchmarkConfig;scenarios:any[];results:RunResult[];summary?:BenchmarkSummary}){return <Box flexDirection="column"><Text>Model: {config.model||'(endpoint default)'}</Text><Text>Endpoint: {config.baseUrl}</Text><Text>Tier: {config.tier} · Source: {config.source} · Scenarios: {scenarios.length} · Trials: {config.trials}</Text><Text>Adapter: {config.adapter} · Cluster: {config.cluster} · Concurrency: {config.concurrency}</Text><Text>Progress: {results.length}/{scenarios.length}{summary?` · Pass rate: ${(summary.successRate*100).toFixed(1)}%`:''}</Text>{summary&&<Text>{formatSummary(summary)}</Text>}</Box>}
+function Rankings({ranking}:{ranking:any}){return <Box flexDirection="column"><Text bold>Overall score {(ranking.score*100).toFixed(1)}%</Text>{Object.entries(ranking.dimensions).map(([k,v])=><Text key={k}>{k.padEnd(24)} {((v as number)*100).toFixed(1)}%</Text>)}</Box>}
+function Compare({results}:{results:RunResult[]}){return <Box flexDirection="column"><Text bold>Paired comparison</Text><Text>Current run scenarios: {results.length}</Text><Text dimColor>Use compareRuns() with two saved result sets for exact paired McNemar analysis.</Text></Box>}
+function ScenarioList({scenarios}:{scenarios:any[]}){return <Box flexDirection="column">{scenarios.slice(0,18).map(s=><Text key={s.id}>{s.id} · {s.category} · {s.title??s.description}</Text>)}{scenarios.length>18&&<Text dimColor>… {scenarios.length-18} more</Text>}</Box>}
+function History({items}:{items:any[]}){return <Box flexDirection="column">{items.slice(-12).reverse().map(x=><Text key={x.runId}>{x.startedAt} · {x.model||'(unknown)'} · {(Number(x.summary?.successRate??0)*100).toFixed(1)}%</Text>)}{!items.length&&<Text dimColor>No history yet.</Text>}</Box>}
+function Profiles(){return <Box flexDirection="column">{PROFILES.map(p=><Text key={p.id}><Text bold>{p.id}</Text> · {p.description}</Text>)}</Box>}
