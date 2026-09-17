@@ -1,7 +1,43 @@
 import type {AdapterRequest,AdapterResponse,AdapterKind,LlmAdapter,ToolCall} from '../types.js';
 export interface AdapterOptions{baseUrl:string;apiKey?:string;timeoutMs:number;}
 function safeJsonObject(value:unknown):Record<string,unknown>{if(value&&typeof value==='object'&&!Array.isArray(value))return value as Record<string,unknown>;if(typeof value!=='string')return{};try{const parsed:unknown=JSON.parse(value);return parsed&&typeof parsed==='object'&&!Array.isArray(parsed)?parsed as Record<string,unknown>:{};}catch{return{};}}
-export class OpenAICompatibleAdapter implements LlmAdapter{readonly kind:AdapterKind='openai-compatible';constructor(protected readonly options:AdapterOptions){}async complete(request:AdapterRequest):Promise<AdapterResponse>{const started=performance.now(),controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),this.options.timeoutMs);try{const response=await fetch(`${this.options.baseUrl.replace(/\/$/,'')}/chat/completions`,{method:'POST',signal:controller.signal,headers:{'content-type':'application/json',...(this.options.apiKey?{authorization:`Bearer ${this.options.apiKey}`}:{})},body:JSON.stringify({model:request.model,messages:request.messages,tools:request.tools.map(tool=>({type:'function',function:{name:tool.name,description:tool.description,parameters:tool.parameters}})),tool_choice:request.toolChoice??'auto',temperature:request.temperature??0})});const payload=await response.json() as any;if(!response.ok)throw new Error(`LLM endpoint returned ${response.status}: ${payload?.error?.message??response.statusText}`);const message=payload?.choices?.[0]?.message??{};const toolCalls:ToolCall[]=(message.tool_calls??[]).map((call:any)=>({id:call.id,name:call.function?.name??'',arguments:safeJsonObject(call.function?.arguments)})).filter((call:ToolCall)=>call.name);return{text:typeof message.content==='string'?message.content:'',toolCalls,durationMs:performance.now()-started,inputTokens:payload?.usage?.prompt_tokens,outputTokens:payload?.usage?.completion_tokens,finishReason:payload?.choices?.[0]?.finish_reason,raw:payload};}finally{clearTimeout(timeout);}}}
+function formatOpenAIMessages(messages: any[]) {
+  return messages.map(m => {
+    if (m.role === 'tool') return { role: 'tool', tool_call_id: m.toolCallId || '', name: m.name, content: m.content ?? '' };
+    if (m.role === 'assistant' && m.toolCalls?.length) {
+      return {
+        role: 'assistant', content: m.content ?? '',
+        tool_calls: m.toolCalls.map((c: any) => ({ id: c.id || `call_${c.name}`, type: 'function', function: { name: c.name, arguments: typeof c.arguments === 'string' ? c.arguments : JSON.stringify(c.arguments || {}) } }))
+      };
+    }
+    return { role: m.role, content: m.content ?? '' };
+  });
+}
+export class OpenAICompatibleAdapter implements LlmAdapter{
+  readonly kind:AdapterKind='openai-compatible';
+  constructor(protected readonly options:AdapterOptions){}
+  async complete(request:AdapterRequest):Promise<AdapterResponse>{
+    const started=performance.now(),controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),this.options.timeoutMs);
+    try{
+      const response=await fetch(`${this.options.baseUrl.replace(/\/$/,'')}/chat/completions`,{
+        method:'POST',signal:controller.signal,
+        headers:{'content-type':'application/json',...(this.options.apiKey?{authorization:`Bearer ${this.options.apiKey}`}:{})},
+        body:JSON.stringify({
+          model:request.model,
+          messages:formatOpenAIMessages(request.messages),
+          tools:request.tools.map(tool=>({type:'function',function:{name:tool.name,description:tool.description,parameters:tool.parameters}})),
+          tool_choice:request.toolChoice??'auto',
+          temperature:request.temperature??0
+        })
+      });
+      const payload=await response.json() as any;
+      if(!response.ok)throw new Error(`LLM endpoint returned ${response.status}: ${payload?.error?.message??response.statusText}`);
+      const message=payload?.choices?.[0]?.message??{};
+      const toolCalls:ToolCall[]=(message.tool_calls??[]).map((call:any)=>({id:call.id,name:call.function?.name??'',arguments:safeJsonObject(call.function?.arguments)})).filter((call:ToolCall)=>call.name);
+      return{text:typeof message.content==='string'?message.content:'',toolCalls,durationMs:performance.now()-started,inputTokens:payload?.usage?.prompt_tokens,outputTokens:payload?.usage?.completion_tokens,finishReason:payload?.choices?.[0]?.finish_reason,raw:payload};
+    }finally{clearTimeout(timeout);}
+  }
+}
 export class RawAdapter extends OpenAICompatibleAdapter{readonly kind:AdapterKind='raw';}
 export class CloudAdapter extends OpenAICompatibleAdapter{readonly kind:AdapterKind='cloud';constructor(options:AdapterOptions){if(!options.apiKey)throw new Error('Cloud adapter requires TOOLERY_API_KEY.');super(options);}}
 export class HermesAdapter implements LlmAdapter{readonly kind:AdapterKind='hermes';async complete():Promise<AdapterResponse>{throw new Error('Hermes adapter requires the optional Hermes/MCP bridge. Use adapter=hermes only after configuring HERMES_HOME and the bridge runtime.');}}

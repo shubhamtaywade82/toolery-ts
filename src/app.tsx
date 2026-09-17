@@ -1,73 +1,283 @@
-import React,{useState,useMemo}from'react';
-import{Box,Text,useApp,useInput,Spacer}from'ink';
-import type{BenchmarkConfig,BenchmarkSummary,RunResult,TrialResult,CapabilityName}from'./types.js';
-import{loadScenarios}from'./scenarios.js';
-import{BenchmarkService}from'./benchmark.js';
-import{PROFILES}from'./profiles.js';
-import{formatSummary}from'./export.js';
-import{appendHistory,loadHistory}from'./history.js';
-import{buildRanking}from'./rankings.js';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Box, Text, useApp, useInput } from 'ink';
+import {
+  Page, Tabs, Panel, Columns, KeyValue, Badge, Pill, ProgressBar,
+  Spinner, StatusMessage, Alert, Table, SelectableRow, TextInput,
+  UnorderedList, type Column
+} from '@kud/ink-ui';
+import { BenchmarkService } from './benchmark.js';
+import { loadScenarios } from './scenarios.js';
+import { PROFILES } from './profiles.js';
+import { probeEndpoint } from './probe.js';
+import { formatSummary } from './export.js';
+import { buildRanking } from './rankings.js';
+import { appendHistory, loadHistory } from './history.js';
+import type { BenchmarkConfig, BenchmarkSummary, HealthProbe, RunResult, Scenario, TrialResult, CapabilityName } from './types.js';
 
-const TABS=['Home','Scenarios','Run','Results','Rankings','Compare','Profiles','History','Settings']as const;
-type Tab=typeof TABS[number];
-const CAPABILITIES:CapabilityName[]=['agenticPlanning','parameterPrecision','stateTracking','instructionFollowing','restraint','errorRecovery','calibration','correctness'];
-const SETTING_FIELDS=[{id:'model',label:'Model',type:'text'},{id:'baseUrl',label:'Base URL',type:'text'},{id:'adapter',label:'Adapter',type:'select',options:['openai-compatible','raw','mock','cloud','hermes']},{id:'source',label:'Source',type:'select',options:['synthetic','upstream']},{id:'tier',label:'Tier',type:'select',options:['all','easy','medium','hard','very-hard']},{id:'trials',label:'Trials',type:'number',min:1,max:100},{id:'concurrency',label:'Concurrency',type:'number',min:1,max:32}] as const;
+type Tab = 'Home' | 'Scenarios' | 'Run' | 'Results' | 'Rankings' | 'Compare' | 'Profiles' | 'History' | 'Settings';
+const TABS = ['Home', 'Scenarios', 'Run', 'Results', 'Rankings', 'Compare', 'Profiles', 'History', 'Settings'] as const;
+const PRESETS = [
+  { id: 'ollama', name: 'Ollama (Local)', baseUrl: 'http://localhost:11434/v1', adapter: 'openai-compatible' }, { id: 'lmstudio', name: 'LMStudio (Local)', baseUrl: 'http://localhost:1234/v1', adapter: 'openai-compatible' },
+  { id: 'vllm', name: 'vLLM (Local)', baseUrl: 'http://localhost:8000/v1', adapter: 'openai-compatible' }, { id: 'openrouter', name: 'OpenRouter (Cloud)', baseUrl: 'https://openrouter.ai/api/v1', adapter: 'openai-compatible' },
+  { id: 'openai', name: 'OpenAI Official', baseUrl: 'https://api.openai.com/v1', adapter: 'openai-compatible' }, { id: 'groq', name: 'Groq Cloud', baseUrl: 'https://api.groq.com/openai/v1', adapter: 'openai-compatible' },
+  { id: 'mock', name: 'Mock Adapter (Testing)', baseUrl: 'http://localhost:11434/v1', adapter: 'mock' }, { id: 'custom', name: 'Custom Endpoint', baseUrl: '', adapter: 'openai-compatible' },
+] as const;
+const FIELDS = [
+  { id: 'preset', label: 'Preset Provider', type: 'select' }, { id: 'baseUrl', label: 'Base URL', type: 'text' }, { id: 'apiKey', label: 'API Key', type: 'text' },
+  { id: 'model', label: 'Model', type: 'text' }, { id: 'adapter', label: 'Adapter', type: 'cycle' }, { id: 'tier', label: 'Tier', type: 'cycle' },
+  { id: 'trials', label: 'Trials', type: 'number' }, { id: 'concurrency', label: 'Concurrency', type: 'number' }, { id: 'withPerf', label: 'Perf Checks', type: 'toggle' },
+] as const;
+const CAPS: CapabilityName[] = ['agenticPlanning', 'parameterPrecision', 'stateTracking', 'instructionFollowing', 'restraint', 'errorRecovery', 'calibration', 'correctness'];
 
-export function App({config}:{config:BenchmarkConfig}){
- const{exit}=useApp();
- const[tab,setTab]=useState<Tab>('Home');
- const[cfg,setCfg]=useState<BenchmarkConfig>(config);
- const[sfocus,setSfocus]=useState(0);const[editing,setEditing]=useState(false);const[editVal,setEditVal]=useState('');
- const scenarios=useMemo(()=>{process.env.TOOLERY_SOURCE=cfg.source;const s=loadScenarios(cfg.tier==='all'?undefined:cfg.tier as any);return cfg.category?s.filter((x:any)=>x.category===cfg.category):s},[cfg.source,cfg.tier,cfg.category]);
- const[results,setResults]=useState<RunResult[]>([]);const[running,setRunning]=useState(false);const[completed,setCompleted]=useState(0);const[error,setError]=useState<string>();const[history,setHistory]=useState<any[]>([]);const[summary,setSummary]=useState<BenchmarkSummary>();const[activeScenario,setActiveScenario]=useState<string>();
- useInput((input,key)=>{
-  if(input==='q'){exit();return}
-  if(key.escape){if(editing){setEditing(false);return}if(tab==='Settings'){setTab('Home');return}exit();return}
-  if(tab==='Settings'){
-    if(editing){
-      if(key.return){const f=SETTING_FIELDS[sfocus];setCfg(c=>({...c,[f.id]:f.type==='number'?Math.max((f as any).min,Math.min((f as any).max,Number(editVal)||0)):editVal}));setEditing(false);return}
-      if(key.backspace||key.delete){setEditVal(v=>v.slice(0,-1));return}
-      if(input&&input.length===1)setEditVal(v=>v+input);
-      return
-    }
-    if(key.upArrow){setSfocus(i=>(i-1+SETTING_FIELDS.length)%SETTING_FIELDS.length);return}
-    if(key.downArrow){setSfocus(i=>(i+1)%SETTING_FIELDS.length);return}
-    if(key.return){const f=SETTING_FIELDS[sfocus];if(f.type==='text'){setEditVal(String((cfg as any)[f.id]??''));setEditing(true);return}}
-    if(key.leftArrow||key.rightArrow){
-      const f=SETTING_FIELDS[sfocus];const dir=key.rightArrow?1:-1;
-      if(f.type==='select'){const opts=[...(f as any).options]as string[];const cur=opts.indexOf(String((cfg as any)[f.id]));setCfg(c=>({...c,[f.id]:opts[(cur+dir+opts.length)%opts.length]}));return}
-      if(f.type==='number'){const{min,max}=f as any;setCfg(c=>({...c,[f.id]:Math.min(max,Math.max(min,Number((c as any)[f.id])+dir))}));return}
-      move(dir);return
-    }
-    if(input==='r'&&!running)void run();
-    return
-  }
-  if(key.leftArrow)move(-1);if(key.rightArrow)move(1);if(input==='r'&&!running)void run()
- });
- function move(delta:number){const i=TABS.indexOf(tab);setTab(TABS[(i+delta+TABS.length)%TABS.length])}
- async function run(){setRunning(true);setResults([]);setCompleted(0);setError(undefined);setSummary(undefined);try{const service=new BenchmarkService(cfg);const result=await service.run(scenarios,(count,_total,item)=>{setCompleted(count);setActiveScenario(item.scenarioId);setResults(p=>[...p,item])});setResults(result.results);setSummary(result.summary);setActiveScenario(result.results.at(-1)?.scenarioId);const runId=`${Date.now()}-${Math.random().toString(36).slice(2,8)}`;await appendHistory({runId,startedAt:new Date().toISOString(),model:cfg.model,adapter:cfg.adapter,source:cfg.source,tier:cfg.tier,profile:cfg.profile,cluster:cfg.cluster,summary:result.summary,results:result.results});setHistory(await loadHistory())}catch(e){setError(e instanceof Error?e.message:String(e))}finally{setRunning(false)}}
- const ranking=buildRanking(cfg.model||'(unknown)',cfg.adapter,cfg.cluster??'single',results);const current=results.at(-1);const scenario=scenarios.find(s=>s.id===activeScenario)??scenarios[completed]??scenarios[0];
- return <Box flexDirection="column"padding={1}width={150}><Header config={cfg}running={running}/><TabBar tab={tab}/>{error&&<Box borderStyle="round"borderColor="red"paddingX={1}><Text color="red">ERROR  {error}</Text></Box>}{tab==='Home'&&<Home config={cfg}scenarios={scenarios}results={results}summary={summary}running={running}current={current}scenario={scenario}/>}{tab==='Scenarios'&&<ScenarioList scenarios={scenarios}results={results}active={activeScenario}/>}{tab==='Run'&&<RunView config={cfg}scenario={scenario}current={current}running={running}completed={completed}total={scenarios.length}/>}{tab==='Results'&&<ResultsView results={results}summary={summary}/>}{tab==='Rankings'&&<Rankings ranking={ranking}/>}{tab==='Compare'&&<Compare results={results}/>}{tab==='Profiles'&&<Profiles/>}{tab==='History'&&<History items={history}/>}{tab==='Settings'&&<Settings cfg={cfg}sfocus={sfocus}editing={editing}editVal={editVal}/>}<Footer tab={tab}editing={editing}/></Box>
+function maskKey(key?: string): string {
+  if (!key) return '(none)';
+  return key.length <= 8 ? '••••••••' : `••••••••${key.slice(-4)}`;
 }
-function Header({config,running}:{config:BenchmarkConfig;running:boolean}){return <Box borderStyle="round"paddingX={2}flexDirection="column"><Box><Text bold color="cyan">🔧 Toolery-TS</Text><Text>  ·  Deterministic tool-calling benchmark for LLM endpoints</Text><Spacer/><Text color="green">● {running?'RUNNING':'READY'}</Text></Box><Box><Text dimColor>v{config.benchmarkVersion}   </Text><Text color="gray">Model:</Text><Text> {config.model||'(endpoint default)'} </Text><Text color="gray">Adapter:</Text><Text> {config.adapter}</Text><Spacer/><Text dimColor>{config.baseUrl}</Text></Box></Box>}
-function TabBar({tab}:{tab:Tab}){return <Box marginTop={1}borderStyle="single"paddingX={1}>{TABS.map(t=><Box key={t}paddingX={1}><Text bold={t===tab}color={t===tab?'cyan':undefined}>{t===tab?'[ '+t+' ]':t}</Text></Box>)}</Box>}
-function Home({config,scenarios,results,summary,running,current,scenario}:{config:BenchmarkConfig;scenarios:any[];results:RunResult[];summary?:BenchmarkSummary;running:boolean;current?:RunResult;scenario:any}){const completed=results.length;const pct=scenarios.length?Math.round(completed/scenarios.length*100):0;return <Box marginTop={1}><Box width="31%"flexDirection="column"><Panel title="⚙ Configuration"><KV k="Model"v={config.model||'(endpoint default)'}/><KV k="Base URL"v={config.baseUrl}/><KV k="Adapter"v={config.adapter}/><KV k="Tier"v={`${config.tier} (${scenarios.length} scenarios)`}/><KV k="Trials"v={String(config.trials)}/><KV k="Concurrency"v={String(config.concurrency)}/><KV k="Source"v={config.source}/><KV k="Cluster"v={config.cluster??'single'}/><Box marginTop={1}><Text color="green">✓ Endpoint configured</Text></Box></Panel><Panel title="▶ Benchmark Progress"><Progress value={pct}/><Text>{completed} / {scenarios.length} ({pct}%)</Text><Box marginTop={1}flexDirection="column"><KV k="Current"v={scenario?.id??'—'}/><KV k="Category"v={scenario?.category??'—'}/><KV k="Status"v={running?'Running...':summary?'Complete':'Ready'}/></Box></Panel><Panel title="⚡ Quick Actions"><KV k="r"v="Start benchmark"/><KV k="→ / ←"v="Switch tab"/><KV k="q"v="Quit"/><KV k="Esc"v="Quit"/></Panel></Box><Box width="69%"marginLeft={1}flexDirection="column"><LivePanel scenario={scenario}current={current}running={running}/><Box alignItems="flex-start"><ResultPanel result={current}/><CapabilityPanel result={current}summary={summary}/></Box><RecentPanel results={results}/></Box></Box>}
-function RunView({config,scenario,current,running,completed,total}:{config:BenchmarkConfig;scenario:any;current?:RunResult;running:boolean;completed:number;total:number}){return <Box marginTop={1}flexDirection="column"><LivePanel scenario={scenario}current={current}running={running}/><Box marginTop={1}><Panel title="Run configuration"><KV k="Model"v={config.model||'(endpoint default)'}/><KV k="Adapter"v={config.adapter}/><KV k="Trials"v={String(config.trials)}/><KV k="Concurrency"v={String(config.concurrency)}/><KV k="Progress"v={`${completed} / ${total}`}/></Panel><TracePanel trial={current?.trials.at(-1)}/></Box></Box>}
-function LivePanel({scenario,current,running}:{scenario:any;current?:RunResult;running:boolean}){return <Panel title={`▣ Live Run · ${scenario?.id??'—'}`}right={running?'Running...':'READY'}rightColor={running?'yellow':'green'}><Text>{scenario?.description??scenario?.prompt??'Ready to run benchmark.'}</Text><TracePanel trial={current?.trials.at(-1)}compact/></Panel>}
-function TracePanel({trial,compact=false}:{trial?:TrialResult;compact?:boolean}){if(!trial)return <Box marginTop={1}><Text dimColor>No tool trace yet. Press [r] to start a benchmark.</Text></Box>;if(trial.error)return <Box marginTop={1}flexDirection="column"><Text bold color="red">✗ Error</Text><Box borderStyle="single"paddingX={1}><Text color="red">{trial.error}</Text></Box></Box>;return <Box marginTop={1}flexDirection="column"><Text bold color="cyan">● Conversation</Text><Box borderStyle="single"flexDirection="column"paddingX={1}>{(trial.trace??[]).slice(compact?-8:0).map((m,i)=><Box key={`${m.role}-${i}`}><Cell width={compact?18:22}bold color={m.role==='tool'?'green':m.role==='assistant'?'magenta':m.role==='user'?'white':'gray'}>{m.role.toUpperCase()}</Cell><Text>{String(m.content??(m.toolCalls?.map(c=>`${c.name}(${JSON.stringify(c.arguments)})`).join(', ')??''))}</Text></Box>)}</Box></Box>}
-function ResultPanel({result}:{result?:RunResult}){const t=result?.trials.at(-1);return <Box width="52%"><Panel title="✓ Scenario Result"right={t?.success?'PASS':t?.error?'ERROR':'—'}rightColor={t?.success?'green':t?.error?'red':'gray'}>{t?<><KV k="Tool Calls"v={`${t.toolCalls.length} observed`}/><KV k="Arguments"v={`${(t.toolCallScore.argumentAccuracy*100).toFixed(0)}% correct`}/><KV k="Response"v={`${t.textScore.similarity.toFixed(2)} similarity`}/><KV k="Duration"v={`${(t.durationMs/1000).toFixed(1)}s`}/><KV k="Tokens"v={t.inputTokens&&t.outputTokens?`${t.inputTokens+t.outputTokens}`:'—'}/>{t.error&&<KV k="Error"v={t.error}/>}</>:<Text dimColor>No completed scenario.</Text>}</Panel></Box>}
-function CapabilityPanel({result,summary}:{result?:RunResult;summary?:BenchmarkSummary}){const scores=result?.capabilityScores??summary?.capabilityScores;return <Box width="48%"marginLeft={1}><Panel title="▥ Capability Scores">{CAPABILITIES.map(k=><Score key={k}name={k}value={Number(scores?.[k]??0)}/>)}</Panel></Box>}
-function Score({name,value}:{name:string;value:number}){const width=14;const filled=Math.max(0,Math.min(width,Math.round(value*width)));return <Box><Cell width={24}>{name}</Cell><Text color={value>=.8?'green':value>=.6?'yellow':'red'}>{'█'.repeat(filled)}{'░'.repeat(width-filled)}</Text><Text> {(value*100).toFixed(0)}%</Text></Box>}
-function RecentPanel({results}:{results:RunResult[]}){return <Panel title="▤ Recent Scenarios"marginTop={1}><Box><Cell width={5}>#</Cell><Cell width={18}>ID</Cell><Cell width={10}>Tier</Cell><Cell width={20}>Category</Cell><Cell width={12}>Status</Cell><Cell width={12}>Calls</Cell><Cell width={10}>Score</Cell><Text>Duration</Text></Box>{results.slice(-6).map((r,i)=>{const t=r.trials.at(-1);return <Box key={r.scenarioId}><Cell width={5}>{results.length-5+i}</Cell><Cell width={18}color="cyan">{r.scenarioId}</Cell><Cell width={10}>{r.tier}</Cell><Cell width={20}>{r.category??'—'}</Cell><Cell width={12}color={t?.success?'green':t?.error?'red':'yellow'}>{t?.success?'✓ Pass':t?.error?'✗ Err':'○ Done'}</Cell><Cell width={12}>{t?`${t.toolCalls.length} calls`:'—'}</Cell><Cell width={10}>{t?(t.success?'PASS':'FAIL'):'—'}</Cell><Text>{t?`${(t.durationMs/1000).toFixed(1)}s`:'—'}</Text></Box>})}</Panel>}
-function ScenarioList({scenarios,results,active}:{scenarios:any[];results:RunResult[];active?:string}){return <Panel title={`Scenarios · ${scenarios.length}`}marginTop={1}>{scenarios.slice(0,30).map((s,i)=>{const r=results.find(x=>x.scenarioId===s.id);return <Box key={s.id}><Cell width={5}>{i+1}</Cell><Cell width={18}color={s.id===active?'cyan':undefined}>{s.id}</Cell><Cell width={12}>{s.tier}</Cell><Cell width={24}>{s.category}</Cell><Text>{r?(r.trials.at(-1)?.success?'✓ PASS':'✗ FAIL'):'○ PENDING'}</Text></Box>})}{scenarios.length>30&&<Text dimColor>… {scenarios.length-30} more</Text>}</Panel>}
-function ResultsView({results,summary}:{results:RunResult[];summary?:BenchmarkSummary}){return <Box marginTop={1}flexDirection="column"><Panel title="Benchmark Results">{summary&&<Text bold color="cyan">{formatSummary(summary)}</Text>}<Text>Completed scenarios: {results.length}</Text></Panel>{results.slice(-8).reverse().map(r=><ResultPanel key={r.scenarioId}result={r}/>)}</Box>}
-function Rankings({ranking}:{ranking:any}){return <Box marginTop={1}flexDirection="column"><Panel title="Rankings"><Text bold>Score {(ranking.score*100).toFixed(1)}%</Text>{Object.entries(ranking.dimensions).map(([k,v])=><Score key={k}name={k}value={Number(v)}/>)}</Panel></Box>}
-function Compare({results}:{results:RunResult[]}){return <Box marginTop={1}><Panel title="Paired comparison"><Text>Current run scenarios: {results.length}</Text><Text dimColor>Use compareRuns() with two saved result sets for exact paired McNemar analysis.</Text></Panel></Box>}
-function Profiles(){return <Box marginTop={1}><Panel title="Benchmark Profiles">{PROFILES.map(p=><Box key={p.id}><Cell width={20}bold>{p.id}</Cell><Text>{p.description}</Text></Box>)}</Panel></Box>}
-function History({items}:{items:any[]}){return <Box marginTop={1}><Panel title="Run History">{items.slice(-15).reverse().map(x=><Box key={x.runId}><Cell width={28}>{x.startedAt}</Cell><Cell width={22}>{x.model||'(unknown)'}</Cell><Text>{(Number(x.summary?.successRate??0)*100).toFixed(1)}%</Text></Box>)}{!items.length&&<Text dimColor>No history yet.</Text>}</Panel></Box>}
-function Settings({config}:{config:BenchmarkConfig}){return <Box marginTop={1}><Panel title="Settings"><KV k="Benchmark version"v={config.benchmarkVersion}/><KV k="Timeout"v={`${config.timeoutMs}ms`}/><KV k="Endpoint path"v={config.endpointPath}/><KV k="Source"v={config.source}/><KV k="Performance checks"v={config.withPerf?'enabled':'disabled'}/></Panel></Box>}
-function Panel({title,children,marginTop,right,rightColor}:{title:string;children:React.ReactNode;marginTop?:number;right?:string;rightColor?:'green'|'yellow'|'red'|'gray'}){return <Box borderStyle="round"paddingX={1}marginTop={marginTop??0}flexDirection="column"><Box><Text bold color="cyan">{title}</Text><Spacer/>{right&&<Text color={rightColor}>{right}</Text>}</Box>{children}</Box>}
-function KV({k,v}:{k:string;v:string}){return <Box><Cell width={20}color="gray">{k}</Cell><Text>{v}</Text></Box>}
-function Cell({children,width,color,bold}:{children:React.ReactNode;width:number;color?:'black'|'red'|'green'|'yellow'|'blue'|'magenta'|'cyan'|'white'|'gray';bold?:boolean}){return <Box width={width}flexShrink={0}><Text color={color}bold={bold}>{children}</Text></Box>}
-function Progress({value}:{value:number}){const width=28;const filled=Math.max(0,Math.min(width,Math.round(value/100*width)));return <Box><Text color="green">{'█'.repeat(filled)}</Text><Text color="gray">{'░'.repeat(width-filled)}</Text><Text> {value}%</Text></Box>}
-function Footer(){return <Box marginTop={1}borderStyle="single"paddingX={1}><Text dimColor>↑/↓ navigate   Enter select   ←/→ tabs   r run   ? help   q quit</Text><Spacer/><Text dimColor>143 scenarios · 18 capability dimensions · deterministic scoring</Text></Box>}
+function tierTone(tier?: string): 'info' | 'success' | 'warning' | 'error' {
+  return tier === 'easy' ? 'success' : tier === 'medium' ? 'info' : tier === 'hard' ? 'warning' : 'error';
+}
+function sanitizeCfg(c: BenchmarkConfig): BenchmarkConfig {
+  return {
+    ...c, benchmarkVersion: c?.benchmarkVersion ?? '1.0.0', endpointPath: c?.endpointPath ?? '/chat/completions',
+    source: c?.source ?? 'synthetic', withPerf: c?.withPerf ?? false, trials: c?.trials ?? 3,
+    concurrency: c?.concurrency ?? 1, timeoutMs: c?.timeoutMs ?? 30000, baseUrl: c?.baseUrl ?? 'http://localhost:11434/v1',
+    adapter: c?.adapter ?? 'openai-compatible'
+  };
+}
+
+function useProbeState(baseUrl: string, apiKey?: string) {
+  const [probe, setProbe] = useState<HealthProbe>({ reachable: false, latencyMs: 0, baseUrl, models: [] });
+  const [probing, setProbing] = useState(false);
+  async function trigger(url = baseUrl, key = apiKey) {
+    setProbing(true);
+    try {
+      const res = await probeEndpoint(url, key);
+      setProbe(res); return res;
+    } catch {
+      setProbe({ reachable: false, latencyMs: 0, baseUrl: url, models: [], error: 'Probe failed' }); return null;
+    } finally { setProbing(false); }
+  }
+  useEffect(() => { void trigger(baseUrl, apiKey); }, []);
+  return { probe, probing, trigger };
+}
+
+function useRunner(cfg: BenchmarkConfig, scenarios: Scenario[]) {
+  const [running, setRunning] = useState(false);
+  const [results, setResults] = useState<RunResult[]>([]);
+  const [current, setCurrent] = useState<RunResult | undefined>();
+  const [summary, setSummary] = useState<BenchmarkSummary | undefined>();
+  const [history, setHistory] = useState<any[]>([]);
+  const [error, setError] = useState<string | undefined>();
+  useEffect(() => { void loadHistory().then(setHistory); }, []);
+
+  async function execute(modelsToRun: string[]) {
+    setRunning(true); setResults([]); setCurrent(undefined); setSummary(undefined); setError(undefined);
+    try {
+      for (const targetModel of modelsToRun) {
+        const mCfg = { ...cfg, model: targetModel };
+        const service = new BenchmarkService(mCfg);
+        const result = await service.run(scenarios, (_c, _t, item) => { setCurrent(item); setResults(prev => [...prev, item]); });
+        setResults(result.results); setSummary(result.summary);
+        await appendHistory({
+          runId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, startedAt: new Date().toISOString(),
+          model: mCfg.model, adapter: mCfg.adapter, source: mCfg.source, tier: mCfg.tier, profile: mCfg.profile,
+          cluster: mCfg.cluster, summary: result.summary, results: result.results
+        });
+        setHistory(await loadHistory());
+      }
+    } catch (err) { setError(err instanceof Error ? err.message : String(err)); } finally { setRunning(false); }
+  }
+  return { running, results, current, summary, history, error, execute };
+}
+
+function useAppNav({ tab, setTab, editing, onRun, onProbe, onCycleModel }: any) {
+  const { exit } = useApp();
+  useInput((input, key) => {
+    if (editing) return;
+    if (key.escape) return tab === 'Settings' ? setTab('Home') : exit();
+    if (input === 'q') return exit();
+    if (input === 'r') return onRun();
+    if (input === 's') return setTab('Settings');
+    if (input === 'p') return onProbe();
+    if (input === 'm') return onCycleModel();
+    if (key.tab || key.rightArrow) { const i = TABS.indexOf(tab); if (i >= 0) setTab(TABS[(i + 1) % TABS.length]); }
+    if (key.leftArrow) { const i = TABS.indexOf(tab); if (i >= 0) setTab(TABS[(i - 1 + TABS.length) % TABS.length]); }
+  });
+}
+
+function getHints(tab: Tab, editing: boolean): [string, string][] {
+  if (editing) return [['Enter', 'Save'], ['Esc', 'Cancel']];
+  if (tab === 'Settings') return [['↑/↓', 'Select'], ['Enter', 'Edit'], ['←/→', 'Cycle'], ['p', 'Probe'], ['r', 'Run']];
+  return [['←/→', 'Tabs'], ['s', 'Settings'], ['p', 'Probe'], ['m', 'Model'], ['r', 'Run']];
+}
+
+export function App({ config }: { config: BenchmarkConfig }) {
+  const [cfg, setCfg] = useState(() => sanitizeCfg(config));
+  const [tab, setTab] = useState<Tab>('Home');
+  const [presetId, setPresetId] = useState<string>('ollama');
+  const [sfocus, setSfocus] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const scenarios = useMemo(() => loadScenarios(cfg.tier === 'all' ? undefined : cfg.tier), [cfg.tier]);
+  const { probe, probing, trigger } = useProbeState(cfg.baseUrl, cfg.apiKey);
+  const runner = useRunner(cfg, scenarios);
+
+  useEffect(() => {
+    if (!cfg.model && probe.models?.length) setCfg(c => ({ ...c, model: probe.models![0] }));
+  }, [probe.models]);
+
+  const cyclePreset = (dir: number) => {
+    const ids = PRESETS.map(p => p.id), nextId = ids[(Math.max(0, ids.indexOf(presetId as any)) + dir + ids.length) % ids.length];
+    setPresetId(nextId); const p = PRESETS.find(x => x.id === nextId);
+    if (p && p.id !== 'custom') { setCfg(c => ({ ...c, baseUrl: p.baseUrl, adapter: p.adapter })); void trigger(p.baseUrl, cfg.apiKey); }
+  };
+  const cycleModel = () => {
+    if (!probe.models?.length) return;
+    const pool = ['all', ...probe.models];
+    setCfg(c => ({ ...c, model: pool[(Math.max(0, pool.indexOf(cfg.model)) + 1) % pool.length] }));
+  };
+  const startRun = () => {
+    if (runner.running) return;
+    void runner.execute(cfg.model === 'all' ? (probe.models?.length ? probe.models : ['mock']) : [cfg.model || 'mock']);
+  };
+
+  useAppNav({ tab, setTab, editing, onRun: startRun, onProbe: () => void trigger(cfg.baseUrl, cfg.apiKey), onCycleModel: cycleModel });
+
+  return (
+    <Page title="Toolery-TS" icon="🔧" scope={`v${cfg.benchmarkVersion} · ${cfg.adapter}`} count={scenarios.length} noun="scenario"
+      status={{ text: probing ? 'Probing...' : probe.reachable ? `ONLINE (${probe.latencyMs}ms · ${probe.models?.length ?? 0} models)` : 'OFFLINE', tone: probing ? 'busy' : probe.reachable ? 'news' : 'quiet' }}
+      tabs={<Tabs active={tab} items={TABS.map(t => ({ value: t, label: t }))} />} hints={getHints(tab, editing)}>
+      {runner.error && <Alert variant="error" title="Execution Error"><Text>{runner.error}</Text></Alert>}
+      {renderTab({ tab, cfg, setCfg, sfocus, setSfocus, editing, setEditing, presetId, cyclePreset, probe, probing, trigger, runner, scenarios })}
+    </Page>
+  );
+}
+
+function renderTab(p: any) {
+  const { tab, cfg, setCfg, sfocus, setSfocus, editing, setEditing, presetId, cyclePreset, probe, probing, trigger, runner, scenarios } = p;
+  if (tab === 'Home') return <HomeView cfg={cfg} probe={probe} results={runner.results} total={scenarios.length} running={runner.running} current={runner.current} summary={runner.summary} presetId={presetId} />;
+  if (tab === 'Scenarios') return <ScenariosView scenarios={scenarios} results={runner.results} />;
+  if (tab === 'Run') return <RunView cfg={cfg} current={runner.current} running={runner.running} completed={runner.results.length} total={scenarios.length} />;
+  if (tab === 'Results') return <ResultsView results={runner.results} summary={runner.summary} />;
+  if (tab === 'Rankings') return <RankingsView cfg={cfg} results={runner.results} />;
+  if (tab === 'Compare') return <CompareView count={runner.results.length} />;
+  if (tab === 'Profiles') return <ProfilesView />;
+  if (tab === 'History') return <HistoryView history={runner.history} />;
+  return <SettingsView cfg={cfg} setCfg={setCfg} sfocus={sfocus} setSfocus={setSfocus} editing={editing} setEditing={setEditing} presetId={presetId} cyclePreset={cyclePreset} probe={probe} probing={probing} trigger={trigger} />;
+}
+
+function HomeView({ cfg, probe, results, total, running, current, summary, presetId }: any) {
+  const pName = PRESETS.find(p => p.id === presetId)?.name ?? 'Custom';
+  const recentData = results.slice(-4).map((r: RunResult) => ({
+    id: r.scenarioId, tier: r.tier, status: r.trials.at(-1)?.success ? 'PASS' : 'FAIL', duration: `${((r.trials.at(-1)?.durationMs ?? 0) / 1000).toFixed(1)}s`
+  }));
+  const recentCols: Column<any>[] = [
+    { key: 'id', header: 'Scenario ID', width: 22 }, { key: 'tier', header: 'Tier', width: 10 }, { key: 'status', header: 'Status', width: 8 }, { key: 'duration', header: 'Duration', width: 10 }
+  ];
+  return (
+    <Columns gap={1}>
+      <Box width="46%" flexDirection="column">
+        <Panel title="⚙ Configuration" focused>
+          <KeyValue label="Provider" value={pName} labelWidth={14} /><KeyValue label="Model" value={cfg.model || '(auto)'} labelWidth={14} />
+          <KeyValue label="Base URL" value={cfg.baseUrl} labelWidth={14} /><KeyValue label="API Key" value={maskKey(cfg.apiKey)} labelWidth={14} />
+          <KeyValue label="Tier" value={<Pill tone="soft" variant={tierTone(cfg.tier)}>{cfg.tier}</Pill>} labelWidth={14} />
+          <KeyValue label="Status" value={<Badge variant={probe.reachable ? 'success' : 'error'}>{probe.reachable ? 'ONLINE' : 'OFFLINE'}</Badge>} labelWidth={14} />
+        </Panel>
+        <Panel title="▶ Benchmark Progress">
+          <ProgressBar value={Math.round((results.length / (total || 1)) * 100)} width={24} color="green" />
+          <KeyValue label="Progress" value={`${results.length} / ${total} (${Math.round((results.length / (total || 1)) * 100)}%)`} labelWidth={14} />
+        </Panel>
+      </Box>
+      <Box width="54%" flexDirection="column">
+        <Panel title={`Live Run · ${current?.scenarioId ?? 'Ready'}`}>
+          {running ? <Spinner label="Executing scenario..." /> : <StatusMessage variant="info">{current ? 'Scenario completed' : 'Ready to start. Press [r].'}</StatusMessage>}
+          <TracePanel trial={current?.trials.at(-1)} />
+        </Panel>
+        <Panel title="▥ Capability Scores">
+          {CAPS.slice(0, 4).map(c => <Box key={c}><Text>{c.padEnd(20)}</Text><ProgressBar value={Math.round(Number(summary?.capabilityScores?.[c] ?? 0) * 100)} width={14} /><Text> {(Number(summary?.capabilityScores?.[c] ?? 0) * 100).toFixed(0)}%</Text></Box>)}
+        </Panel>
+        {recentData.length > 0 && <Panel title="▤ Recent Results"><Table data={recentData} columns={recentCols} /></Panel>}
+      </Box>
+    </Columns>
+  );
+}
+
+function TracePanel({ trial }: { trial?: TrialResult }) {
+  if (!trial) return <Text dimColor>No tool trace yet. Press [r] to start a benchmark.</Text>;
+  if (trial.error) return <Alert variant="error" title="Trial Error"><Text>{trial.error}</Text></Alert>;
+  return (
+    <Box flexDirection="column">
+      <KeyValue label="Tool Calls" value={`${trial.toolCalls.length} calls observed`} labelWidth={14} />
+      <KeyValue label="Result" value={trial.success ? 'PASS' : 'FAIL'} labelWidth={14} /><KeyValue label="Accuracy" value={`${(trial.toolCallScore.argumentAccuracy * 100).toFixed(0)}%`} labelWidth={14} />
+    </Box>
+  );
+}
+
+function SettingsView({ cfg, setCfg, sfocus, setSfocus, editing, setEditing, presetId, cyclePreset, probe, probing, trigger }: any) {
+  const pName = PRESETS.find(p => p.id === presetId)?.name ?? 'Custom';
+  const curField = FIELDS[sfocus];
+  useInput((_input, key) => {
+    if (editing) return;
+    if (key.upArrow) setSfocus((s: number) => (s - 1 + FIELDS.length) % FIELDS.length);
+    if (key.downArrow) setSfocus((s: number) => (s + 1) % FIELDS.length);
+    if (key.return && curField.type === 'text') setEditing(true);
+    if (key.rightArrow || key.leftArrow) {
+      const dir = key.rightArrow ? 1 : -1;
+      if (curField.id === 'preset') cyclePreset(dir);
+      if (curField.id === 'tier') { const t = ['all', 'easy', 'medium', 'hard', 'very-hard']; setCfg((c: any) => ({ ...c, tier: t[(t.indexOf(c.tier) + dir + t.length) % t.length] })); }
+      if (curField.id === 'withPerf') setCfg((c: any) => ({ ...c, withPerf: !c.withPerf }));
+    }
+  });
+
+  return (
+    <Columns gap={1}>
+      <Box width="52%" flexDirection="column">
+        <Panel title="⚙ Control Panel · Configuration" focused>
+          {FIELDS.map((f, i) => (
+            <SelectableRow key={f.id} active={i === sfocus} marker=">">
+              <Box width={18}><Text bold={i === sfocus} color={i === sfocus ? 'cyan' : 'gray'}>{f.label}</Text></Box>
+              {i === sfocus && editing && (f.id === 'baseUrl' || f.id === 'apiKey' || f.id === 'model') ? (
+                <TextInput defaultValue={String((cfg as any)[f.id] ?? '')} onSubmit={(v) => { setCfg((c: any) => ({ ...c, [f.id]: v })); setEditing(false); if (f.id !== 'model') void trigger(f.id === 'baseUrl' ? v : cfg.baseUrl, f.id === 'apiKey' ? v : cfg.apiKey); }} onCancel={() => setEditing(false)} />
+              ) : (
+                <Text bold={i === sfocus}>{f.id === 'preset' ? pName : f.id === 'apiKey' ? maskKey(cfg.apiKey) : f.id === 'withPerf' ? (cfg.withPerf ? 'enabled' : 'disabled') : String((cfg as any)[f.id] ?? '')}</Text>
+              )}
+            </SelectableRow>
+          ))}
+        </Panel>
+      </Box>
+      <Box width="48%" flexDirection="column">
+        <Panel title="📡 Endpoint Status & Discovered Models">
+          <Badge variant={probe.reachable ? 'success' : 'error'}>{probing ? 'PROBING' : probe.reachable ? 'ONLINE' : 'OFFLINE'}</Badge>
+          <KeyValue label="Base URL" value={cfg.baseUrl} labelWidth={12} /><KeyValue label="Latency" value={probe.reachable ? `${probe.latencyMs}ms` : '—'} labelWidth={12} />
+          <StatusMessage variant={probe.reachable ? 'success' : 'warning'}>{probe.reachable ? `${probe.models?.length ?? 0} models detected` : (probe.error ?? 'Unreachable')}</StatusMessage>
+          <Box marginTop={1}><Text dimColor>Discovered: {probe.models?.slice(0, 5).join(', ') || '(none)'}</Text></Box>
+        </Panel>
+      </Box>
+    </Columns>
+  );
+}
+
+function RunView({ cfg, current, running, completed, total }: any) {
+  return <Panel title="Live Run Detail"><KeyValue label="Model" value={cfg.model || '(endpoint default)'} labelWidth={14} /><KeyValue label="Status" value={running ? <Spinner label="Running scenario..." /> : <Badge variant="info">READY</Badge>} labelWidth={14} /><KeyValue label="Progress" value={`${completed} / ${total}`} labelWidth={14} /><TracePanel trial={current?.trials.at(-1)} /></Panel>;
+}
+function ScenariosView({ scenarios, results }: any) {
+  const tableData = scenarios.slice(0, 15).map((s: Scenario) => ({ id: s.id, tier: s.tier, cat: s.category, status: results.find((r: any) => r.scenarioId === s.id)?.trials.at(-1)?.success ? 'PASS' : 'PENDING' }));
+  return <Panel title={`Scenarios (${scenarios.length})`}><Table data={tableData} columns={[{ key: 'id', header: 'ID', width: 22 }, { key: 'tier', header: 'Tier', width: 12 }, { key: 'cat', header: 'Category', width: 24 }, { key: 'status', header: 'Status', width: 12 }]} /></Panel>;
+}
+function ResultsView({ results, summary }: any) {
+  return <Panel title="Benchmark Summary">{summary && <Alert variant="success" title="Benchmark Complete"><Text>{formatSummary(summary)}</Text></Alert>}<KeyValue label="Completed" value={`${results.length} scenarios`} labelWidth={14} /><Table data={results.slice(-8).reverse().map((r: any) => ({ id: r.scenarioId, tier: r.tier, calls: `${r.trials.at(-1)?.toolCalls.length ?? 0}`, score: r.trials.at(-1)?.success ? 'PASS' : 'FAIL' }))} columns={[{ key: 'id', header: 'Scenario ID', width: 24 }, { key: 'tier', header: 'Tier', width: 12 }, { key: 'calls', header: 'Calls', width: 10 }, { key: 'score', header: 'Score', width: 10 }]} /></Panel>;
+}
+function RankingsView({ cfg, results }: any) {
+  const ranking = buildRanking(cfg.model || 'unknown', cfg.adapter, cfg.cluster, results);
+  const data = Object.entries(ranking.dimensions).map(([k, v]) => ({ dimension: k, score: `${(Number(v) * 100).toFixed(0)}%` }));
+  return <Panel title="Capability Rankings"><Alert variant="info" title={`Overall Score: ${(ranking.score * 100).toFixed(1)}%`}><ProgressBar value={Math.round(ranking.score * 100)} width={30} color="green" /></Alert><Table data={data} columns={[{ key: 'dimension', header: 'Dimension', width: 28 }, { key: 'score', header: 'Score', width: 14 }]} /></Panel>;
+}
+function CompareView({ count }: { count: number }) {
+  return <Panel title="Paired Comparison (McNemar)"><StatusMessage variant="info">Current run scenarios: {count}</StatusMessage><UnorderedList><UnorderedList.Item><Text>Save two result runs to run exact paired McNemar tests.</Text></UnorderedList.Item><UnorderedList.Item><Text>Run CLI export to generate comparative CSV matrix.</Text></UnorderedList.Item></UnorderedList></Panel>;
+}
+function ProfilesView() {
+  return <Panel title="Benchmark Profiles"><Table data={PROFILES.map(p => ({ id: p.id, desc: p.description }))} columns={[{ key: 'id', header: 'Profile ID', width: 22 }, { key: 'desc', header: 'Description', width: 60 }]} /></Panel>;
+}
+function HistoryView({ history }: { history: any[] }) {
+  const data = history.slice(-8).reverse().map(x => ({ date: x.startedAt?.slice(0, 19) ?? '—', model: x.model || '(unknown)', rate: `${(Number(x.summary?.successRate ?? 0) * 100).toFixed(1)}%` }));
+  return <Panel title="Run History (Local)">{data.length ? <Table data={data} columns={[{ key: 'date', header: 'Date', width: 24 }, { key: 'model', header: 'Model', width: 24 }, { key: 'rate', header: 'Success Rate', width: 16 }]} /> : <StatusMessage variant="warning">No history recorded yet.</StatusMessage>}</Panel>;
+}
