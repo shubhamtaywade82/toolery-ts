@@ -17,15 +17,20 @@ import type { BenchmarkConfig, BenchmarkSummary, HealthProbe, RunResult, Scenari
 type Tab = 'Home' | 'Scenarios' | 'Run' | 'Results' | 'Rankings' | 'Compare' | 'Profiles' | 'History' | 'Settings';
 const TABS = ['Home', 'Scenarios', 'Run', 'Results', 'Rankings', 'Compare', 'Profiles', 'History', 'Settings'] as const;
 const PRESETS = [
-  { id: 'ollama', name: 'Ollama (Local)', baseUrl: 'http://localhost:11434/v1', adapter: 'openai-compatible' }, { id: 'lmstudio', name: 'LMStudio (Local)', baseUrl: 'http://localhost:1234/v1', adapter: 'openai-compatible' },
-  { id: 'vllm', name: 'vLLM (Local)', baseUrl: 'http://localhost:8000/v1', adapter: 'openai-compatible' }, { id: 'openrouter', name: 'OpenRouter (Cloud)', baseUrl: 'https://openrouter.ai/api/v1', adapter: 'openai-compatible' },
-  { id: 'openai', name: 'OpenAI Official', baseUrl: 'https://api.openai.com/v1', adapter: 'openai-compatible' }, { id: 'groq', name: 'Groq Cloud', baseUrl: 'https://api.groq.com/openai/v1', adapter: 'openai-compatible' },
-  { id: 'mock', name: 'Mock Adapter (Testing)', baseUrl: 'http://localhost:11434/v1', adapter: 'mock' }, { id: 'custom', name: 'Custom Endpoint', baseUrl: '', adapter: 'openai-compatible' },
+  { id: 'ollama', name: 'Ollama Native (Local)', baseUrl: 'http://localhost:11434', adapter: 'ollama' },
+  { id: 'ollama-v1', name: 'Ollama OpenAI /v1 (Local)', baseUrl: 'http://localhost:11434/v1', adapter: 'openai-compatible' },
+  { id: 'lmstudio', name: 'LMStudio (Local)', baseUrl: 'http://localhost:1234/v1', adapter: 'openai-compatible' },
+  { id: 'vllm', name: 'vLLM (Local)', baseUrl: 'http://localhost:8000/v1', adapter: 'openai-compatible' },
+  { id: 'openrouter', name: 'OpenRouter (Cloud)', baseUrl: 'https://openrouter.ai/api/v1', adapter: 'openai-compatible' },
+  { id: 'openai', name: 'OpenAI Official', baseUrl: 'https://api.openai.com/v1', adapter: 'openai-compatible' },
+  { id: 'groq', name: 'Groq Cloud', baseUrl: 'https://api.groq.com/openai/v1', adapter: 'openai-compatible' },
+  { id: 'mock', name: 'Mock Adapter (Testing)', baseUrl: 'http://localhost:11434/v1', adapter: 'mock' },
+  { id: 'custom', name: 'Custom Endpoint', baseUrl: '', adapter: 'openai-compatible' },
 ] as const;
 const FIELDS = [
   { id: 'preset', label: 'Preset Provider', type: 'select' }, { id: 'baseUrl', label: 'Base URL', type: 'text' }, { id: 'apiKey', label: 'API Key', type: 'text' },
   { id: 'model', label: 'Model', type: 'text' }, { id: 'adapter', label: 'Adapter', type: 'cycle' }, { id: 'tier', label: 'Tier', type: 'cycle' },
-  { id: 'trials', label: 'Trials', type: 'number' }, { id: 'concurrency', label: 'Concurrency', type: 'number' }, { id: 'withPerf', label: 'Perf Checks', type: 'toggle' },
+  { id: 'trials', label: 'Trials', type: 'number' }, { id: 'concurrency', label: 'Concurrency', type: 'number' }, { id: 'timeoutMs', label: 'Timeout (s)', type: 'number' }, { id: 'withPerf', label: 'Perf Checks', type: 'toggle' },
 ] as const;
 const CAPS: CapabilityName[] = ['agenticPlanning', 'parameterPrecision', 'stateTracking', 'instructionFollowing', 'restraint', 'errorRecovery', 'calibration', 'correctness'];
 
@@ -36,12 +41,19 @@ function maskKey(key?: string): string {
 function tierTone(tier?: string): 'info' | 'success' | 'warning' | 'error' {
   return tier === 'easy' ? 'success' : tier === 'medium' ? 'info' : tier === 'hard' ? 'warning' : 'error';
 }
+function findPreset(c: BenchmarkConfig): string {
+  const clean = (u?: string) => (u || '').replace(/\/$/, '');
+  const match = PRESETS.find(p => p.adapter === c.adapter && clean(p.baseUrl) === clean(c.baseUrl));
+  return match?.id ?? PRESETS.find(p => p.adapter === c.adapter)?.id ?? 'custom';
+}
 function sanitizeCfg(c: BenchmarkConfig): BenchmarkConfig {
+  const adapter = c?.adapter ?? 'ollama';
+  const baseUrl = c?.baseUrl ?? (adapter === 'ollama' ? 'http://localhost:11434' : 'http://localhost:11434/v1');
   return {
     ...c, benchmarkVersion: c?.benchmarkVersion ?? '1.0.0', endpointPath: c?.endpointPath ?? '/chat/completions',
     source: c?.source ?? 'synthetic', withPerf: c?.withPerf ?? false, trials: c?.trials ?? 3,
-    concurrency: c?.concurrency ?? 1, timeoutMs: c?.timeoutMs ?? 30000, baseUrl: c?.baseUrl ?? 'http://localhost:11434/v1',
-    adapter: c?.adapter ?? 'openai-compatible'
+    concurrency: c?.concurrency ?? 1, timeoutMs: c?.timeoutMs ?? 180_000, baseUrl,
+    adapter
   };
 }
 
@@ -114,7 +126,7 @@ function getHints(tab: Tab, editing: boolean): [string, string][] {
 export function App({ config }: { config: BenchmarkConfig }) {
   const [cfg, setCfg] = useState(() => sanitizeCfg(config));
   const [tab, setTab] = useState<Tab>('Home');
-  const [presetId, setPresetId] = useState<string>('ollama');
+  const [presetId, setPresetId] = useState<string>(() => findPreset(config));
   const [sfocus, setSfocus] = useState(0);
   const [editing, setEditing] = useState(false);
   const scenarios = useMemo(() => loadScenarios(cfg.tier === 'all' ? undefined : cfg.tier), [cfg.tier]);
@@ -147,13 +159,13 @@ export function App({ config }: { config: BenchmarkConfig }) {
       status={{ text: probing ? 'Probing...' : probe.reachable ? `ONLINE (${probe.latencyMs}ms · ${probe.models?.length ?? 0} models)` : 'OFFLINE', tone: probing ? 'busy' : probe.reachable ? 'news' : 'quiet' }}
       tabs={<Tabs active={tab} items={TABS.map(t => ({ value: t, label: t }))} />} hints={getHints(tab, editing)}>
       {runner.error && <Alert variant="error" title="Execution Error"><Text>{runner.error}</Text></Alert>}
-      {renderTab({ tab, cfg, setCfg, sfocus, setSfocus, editing, setEditing, presetId, cyclePreset, probe, probing, trigger, runner, scenarios })}
+      {renderTab({ tab, cfg, setCfg, sfocus, setSfocus, editing, setEditing, presetId, setPresetId, cyclePreset, probe, probing, trigger, runner, scenarios })}
     </Page>
   );
 }
 
 function renderTab(p: any) {
-  const { tab, cfg, setCfg, sfocus, setSfocus, editing, setEditing, presetId, cyclePreset, probe, probing, trigger, runner, scenarios } = p;
+  const { tab, cfg, setCfg, sfocus, setSfocus, editing, setEditing, presetId, setPresetId, cyclePreset, probe, probing, trigger, runner, scenarios } = p;
   if (tab === 'Home') return <HomeView cfg={cfg} probe={probe} results={runner.results} total={scenarios.length} running={runner.running} current={runner.current} summary={runner.summary} presetId={presetId} />;
   if (tab === 'Scenarios') return <ScenariosView scenarios={scenarios} results={runner.results} />;
   if (tab === 'Run') return <RunView cfg={cfg} current={runner.current} running={runner.running} completed={runner.results.length} total={scenarios.length} />;
@@ -162,7 +174,7 @@ function renderTab(p: any) {
   if (tab === 'Compare') return <CompareView count={runner.results.length} />;
   if (tab === 'Profiles') return <ProfilesView />;
   if (tab === 'History') return <HistoryView history={runner.history} />;
-  return <SettingsView cfg={cfg} setCfg={setCfg} sfocus={sfocus} setSfocus={setSfocus} editing={editing} setEditing={setEditing} presetId={presetId} cyclePreset={cyclePreset} probe={probe} probing={probing} trigger={trigger} />;
+  return <SettingsView cfg={cfg} setCfg={setCfg} sfocus={sfocus} setSfocus={setSfocus} editing={editing} setEditing={setEditing} presetId={presetId} setPresetId={setPresetId} cyclePreset={cyclePreset} probe={probe} probing={probing} trigger={trigger} />;
 }
 
 function HomeView({ cfg, probe, results, total, running, current, summary, presetId }: any) {
@@ -212,7 +224,7 @@ function TracePanel({ trial }: { trial?: TrialResult }) {
   );
 }
 
-function SettingsView({ cfg, setCfg, sfocus, setSfocus, editing, setEditing, presetId, cyclePreset, probe, probing, trigger }: any) {
+function SettingsView({ cfg, setCfg, sfocus, setSfocus, editing, setEditing, presetId, setPresetId, cyclePreset, probe, probing, trigger }: any) {
   const pName = PRESETS.find(p => p.id === presetId)?.name ?? 'Custom';
   const curField = FIELDS[sfocus];
   useInput((_input, key) => {
@@ -223,7 +235,11 @@ function SettingsView({ cfg, setCfg, sfocus, setSfocus, editing, setEditing, pre
     if (key.rightArrow || key.leftArrow) {
       const dir = key.rightArrow ? 1 : -1;
       if (curField.id === 'preset') cyclePreset(dir);
+      if (curField.id === 'adapter') { const a = ['ollama', 'openai-compatible', 'mock', 'cloud', 'raw', 'hermes']; const next = a[(a.indexOf(cfg.adapter) + dir + a.length) % a.length]; const p = PRESETS.find(x => x.adapter === next); if (p) setPresetId(p.id); setCfg((c: any) => ({ ...c, adapter: next, baseUrl: p?.baseUrl || c.baseUrl })); }
       if (curField.id === 'tier') { const t = ['all', 'easy', 'medium', 'hard', 'very-hard']; setCfg((c: any) => ({ ...c, tier: t[(t.indexOf(c.tier) + dir + t.length) % t.length] })); }
+      if (curField.id === 'trials') setCfg((c: any) => ({ ...c, trials: Math.max(1, Math.min(10, c.trials + dir)) }));
+      if (curField.id === 'concurrency') setCfg((c: any) => ({ ...c, concurrency: Math.max(1, Math.min(8, c.concurrency + dir)) }));
+      if (curField.id === 'timeoutMs') setCfg((c: any) => ({ ...c, timeoutMs: Math.max(10_000, Math.min(600_000, c.timeoutMs + dir * 30_000)) }));
       if (curField.id === 'withPerf') setCfg((c: any) => ({ ...c, withPerf: !c.withPerf }));
     }
   });
@@ -238,7 +254,7 @@ function SettingsView({ cfg, setCfg, sfocus, setSfocus, editing, setEditing, pre
               {i === sfocus && editing && (f.id === 'baseUrl' || f.id === 'apiKey' || f.id === 'model') ? (
                 <TextInput defaultValue={String((cfg as any)[f.id] ?? '')} onSubmit={(v) => { setCfg((c: any) => ({ ...c, [f.id]: v })); setEditing(false); if (f.id !== 'model') void trigger(f.id === 'baseUrl' ? v : cfg.baseUrl, f.id === 'apiKey' ? v : cfg.apiKey); }} onCancel={() => setEditing(false)} />
               ) : (
-                <Text bold={i === sfocus}>{f.id === 'preset' ? pName : f.id === 'apiKey' ? maskKey(cfg.apiKey) : f.id === 'withPerf' ? (cfg.withPerf ? 'enabled' : 'disabled') : String((cfg as any)[f.id] ?? '')}</Text>
+                <Text bold={i === sfocus}>{f.id === 'preset' ? pName : f.id === 'apiKey' ? maskKey(cfg.apiKey) : f.id === 'timeoutMs' ? `${Math.round(cfg.timeoutMs / 1000)}s` : f.id === 'withPerf' ? (cfg.withPerf ? 'enabled' : 'disabled') : String((cfg as any)[f.id] ?? '')}</Text>
               )}
             </SelectableRow>
           ))}

@@ -4,10 +4,15 @@ export async function probeEndpoint(baseUrl: string, apiKey?: string, timeoutMs 
   const started = performance.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const cleanUrl = `${baseUrl.replace(/\/$/, '')}/models`;
+  const base = baseUrl.replace(/\/$/, '');
   const headers: Record<string, string> = { 'content-type': 'application/json', ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}) };
   try {
-    const response = await fetch(cleanUrl, { headers, signal: controller.signal });
+    const primaryUrl = base.endsWith('/v1') ? `${base}/models` : `${base}/api/tags`;
+    let response = await fetch(primaryUrl, { headers, signal: controller.signal });
+    if (!response.ok && !base.endsWith('/v1')) {
+      const fallback = await fetch(`${base}/models`, { headers, signal: controller.signal });
+      if (fallback.ok) response = fallback;
+    }
     const payload = await response.json().catch(() => ({})) as any;
     const raw = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.models) ? payload.models : [];
     const models = raw.map((m: any) => String(m.id || m.name || '')).filter(Boolean);
