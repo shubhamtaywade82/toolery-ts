@@ -30,7 +30,7 @@ const PRESETS = [
 const FIELDS = [
   { id: 'preset', label: 'Preset Provider', type: 'select' }, { id: 'baseUrl', label: 'Base URL', type: 'text' }, { id: 'apiKey', label: 'API Key', type: 'text' },
   { id: 'model', label: 'Model', type: 'text' }, { id: 'adapter', label: 'Adapter', type: 'cycle' }, { id: 'tier', label: 'Tier', type: 'cycle' },
-  { id: 'trials', label: 'Trials', type: 'number' }, { id: 'concurrency', label: 'Concurrency', type: 'number' }, { id: 'timeoutMs', label: 'Timeout (s)', type: 'number' }, { id: 'withPerf', label: 'Perf Checks', type: 'toggle' },
+  { id: 'trials', label: 'Trials', type: 'number' }, { id: 'concurrency', label: 'Concurrency', type: 'number' }, { id: 'timeoutMs', label: 'Timeout (s)', type: 'number' }, { id: 'numCtx', label: 'Context Window', type: 'number' }, { id: 'withPerf', label: 'Perf Checks', type: 'toggle' },
 ] as const;
 const CAPS: CapabilityName[] = ['agenticPlanning', 'parameterPrecision', 'stateTracking', 'instructionFollowing', 'restraint', 'errorRecovery', 'calibration', 'correctness'];
 
@@ -52,8 +52,8 @@ function sanitizeCfg(c: BenchmarkConfig): BenchmarkConfig {
   return {
     ...c, benchmarkVersion: c?.benchmarkVersion ?? '1.0.0', endpointPath: c?.endpointPath ?? '/chat/completions',
     source: c?.source ?? 'synthetic', withPerf: c?.withPerf ?? false, trials: c?.trials ?? 3,
-    concurrency: c?.concurrency ?? 1, timeoutMs: c?.timeoutMs ?? 180_000, baseUrl,
-    adapter
+    concurrency: c?.concurrency ?? 1, timeoutMs: c?.timeoutMs ?? 180_000, numCtx: c?.numCtx ?? 8192,
+    keepAlive: c?.keepAlive, baseUrl, adapter
   };
 }
 
@@ -240,6 +240,7 @@ function SettingsView({ cfg, setCfg, sfocus, setSfocus, editing, setEditing, pre
       if (curField.id === 'trials') setCfg((c: any) => ({ ...c, trials: Math.max(1, Math.min(10, c.trials + dir)) }));
       if (curField.id === 'concurrency') setCfg((c: any) => ({ ...c, concurrency: Math.max(1, Math.min(8, c.concurrency + dir)) }));
       if (curField.id === 'timeoutMs') setCfg((c: any) => ({ ...c, timeoutMs: Math.max(10_000, Math.min(600_000, c.timeoutMs + dir * 30_000)) }));
+      if (curField.id === 'numCtx') setCfg((c: any) => ({ ...c, numCtx: Math.max(512, Math.min(131072, (c.numCtx ?? 8192) + dir * 2048)) }));
       if (curField.id === 'withPerf') setCfg((c: any) => ({ ...c, withPerf: !c.withPerf }));
     }
   });
@@ -254,7 +255,7 @@ function SettingsView({ cfg, setCfg, sfocus, setSfocus, editing, setEditing, pre
               {i === sfocus && editing && (f.id === 'baseUrl' || f.id === 'apiKey' || f.id === 'model') ? (
                 <TextInput defaultValue={String((cfg as any)[f.id] ?? '')} onSubmit={(v) => { setCfg((c: any) => ({ ...c, [f.id]: v })); setEditing(false); if (f.id !== 'model') void trigger(f.id === 'baseUrl' ? v : cfg.baseUrl, f.id === 'apiKey' ? v : cfg.apiKey); }} onCancel={() => setEditing(false)} />
               ) : (
-                <Text bold={i === sfocus}>{f.id === 'preset' ? pName : f.id === 'apiKey' ? maskKey(cfg.apiKey) : f.id === 'timeoutMs' ? `${Math.round(cfg.timeoutMs / 1000)}s` : f.id === 'withPerf' ? (cfg.withPerf ? 'enabled' : 'disabled') : String((cfg as any)[f.id] ?? '')}</Text>
+                <Text bold={i === sfocus}>{f.id === 'preset' ? pName : f.id === 'apiKey' ? maskKey(cfg.apiKey) : f.id === 'timeoutMs' ? `${Math.round(cfg.timeoutMs / 1000)}s` : f.id === 'numCtx' ? `${cfg.numCtx ?? 8192}` : f.id === 'withPerf' ? (cfg.withPerf ? 'enabled' : 'disabled') : String((cfg as any)[f.id] ?? '')}</Text>
               )}
             </SelectableRow>
           ))}
