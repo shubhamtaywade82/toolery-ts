@@ -2,3 +2,5 @@ node_modules
 dist
 *.tsbuildinfo
 .toolery/
+vendor/toolery-upstream/*
+!vendor/toolery-upstream/NOTICE.md
