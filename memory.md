@@ -4,12 +4,11 @@
 
 ## 1. Current State (last verified 2026-09-26)
 
-- **Version**: package `0.4.1` @ main `970eb29`; benchmark contract `1.0.0`.
-- **Status**: MVP functionally complete and verified, **NOT npm-published** — 5 publish blockers open (see tasks.md P0).
-- **Verified working** (fresh audit, not assumed): typecheck (strict) ✅ · tests 10/10 ✅ · lint 0 errors / 40 `any` warnings ✅ · full benchmark pipeline against a live OpenAI-compatible endpoint (probe → parseConfig → ScenarioRunner → multi-turn tool loop → contract scoring → 18-dimension aggregation → snapshot → CSV export) ✅ · upstream sync (143 scenarios, SHA-256 manifest, tier split 40/45/34/24) ✅ · McNemar implementation mathematically correct ✅ · probe exit codes correct ✅.
-- **Broken**: fresh-clone `npm run build` emits no `dist/` (see D-1). Native Ollama adapter fails small models on main (D-3). `run` crashes in non-TTY (D-5). CI runs on main and is green, but its "Package smoke test" cannot fail on a missing `dist/` (see D-2b).
-- **Upstream scenarios are NOT in git by design** — `vendor/toolery-upstream/` holds only `NOTICE.md`; `npm run sync:upstream` fetches the 143 YAMLs into it (network required). The npm tarball is expected to ship them (files whitelist already includes the dir) once prepublish runs sync.
-- **Unmerged branch**: `fix/ollama-adapter-context-window` (1 commit ahead of main) — the P0-3 critical fix. Do not build new work on main's OllamaAdapter that conflicts with it.
+- **Version**: package `0.4.2` @ main; benchmark contract `1.0.0`. Tag `v0.4.2` + GitHub Release published.
+- **Status**: all 5 publish blockers **resolved** (PRs #1–#5 merged 2026-09-26); release `v0.4.2` tagged. **`npm publish` still pending** — maintainer-run, now guarded by `prepublishOnly`.
+- **Verified working** (fresh audit + post-merge CI): typecheck (strict) ✅ · tests 10/10 ✅ · lint 0 errors / 41 `any` warnings ✅ (PR #1 added one; P1-5 tracks the debt) · full benchmark pipeline against a live OpenAI-compatible endpoint ✅ · upstream sync (143 scenarios, SHA-256 manifest, tier split 40/45/34/24) ✅ · fresh-clone build emits `dist/` ✅ (fixed in PR #2) · headless non-TTY run ✅ (PR #4) · Ollama `num_ctx` fix merged ✅ (PR #1) · pack gate now fails on missing `dist/` ✅ (PR #3) · CI on merged main green (`test` / `build` / `deploy`) ✅.
+- **Upstream scenarios are NOT in git by design** — `vendor/toolery-upstream/` holds only `NOTICE.md`; `npm run sync:upstream` fetches the 143 YAMLs into it (network required). The npm tarball ships them via `prepublishOnly` (sync runs before pack-check `--require-upstream`).
+- **No open fix branches** — `fix/ollama-adapter-context-window` merged as PR #1; P0 fix branches merged as PRs #2–#5 and deleted. Only `main` remains on the remote.
 
 ## 2. Key Decisions (append-only — never delete, supersede with a new entry)
 
@@ -24,26 +23,33 @@
 - **D-8 (inherited)** — Benchmark integrity: the runner never executes model-generated shell/file ops; tool results are synthetic fixtures; terminal scenarios are scored on observable tool-call contracts.
 - **D-9 (inherited)** — Hermes adapter is a deliberate stub that throws with setup guidance; no fake Hermes results. Cluster axis (`single|dual|triple|quad|octa`) is metadata only.
 - **D-10 (2026-09, audit)** — The 6 AI-context docs (`prd/architecture/rules/design/tasks/memory`) were added at project root, grounded in a full external audit. Docs are source-of-truth for new sessions; code wins on conflict → then fix the docs.
+- **D-11 (2026-09-26, release)** — v0.4.2 released via 5 PRs (#1 Ollama num_ctx — author-merged; #2 fresh-clone build + repo hygiene; #3 pack-gate hardening + npm metadata + `prepublishOnly`; #4 headless run mode; #5 upstream-sync error UX), all merged as merge commits, branches deleted after merge. Release flow: docs ticked → version bumped → full `prepublishOnly` gate run locally → tag `v0.4.2` → GitHub Release. `npm publish` itself is maintainer-run (requires their npm credentials/OTP).
 
 ## 3. Known Bugs & Issues Register
 
 | ID | Severity | Summary | Status | Fix path |
 |---|---|---|---|---|
-| B-1 | blocker | Committed `tsconfig.tsbuildinfo` breaks fresh-clone builds | open | tasks P0-1 |
+| B-1 | blocker | Committed `tsconfig.tsbuildinfo` breaks fresh-clone builds | **fixed 2026-09-26** | PR #2 |
 | B-2 | ~~blocker~~ **RETRACTED** | "CI triggers corrupted `branches: ain]`" — false positive from terminal display artifact; raw bytes were always `[main]` (od -c verified) | retracted | — |
-| B-2b | high | `npm pack --dry-run` exits 0 without `dist/` → CI pack smoke test cannot catch broken builds | fix drafted | branch `fix/publish-readiness` (P0-2) |
-| B-3 | blocker | Ollama native adapter fails all scenarios for 1b–9b models (num_ctx truncation) | fix exists unmerged | tasks P0-3 |
-| B-4 | blocker | No headless mode; Ink crashes in non-TTY (`Raw mode is not supported`) | open | tasks P0-4 |
-| B-5 | blocker | package.json missing repository/bugs/homepage; no prepublishOnly guard | open | tasks P0-5 |
-| B-6 | high | `--source upstream` unsynced → raw `ENOENT manifest.json` instead of friendly guidance (existsSync dir check bypassed by NOTICE.md) | open | tasks P1-3 |
-| B-7 | medium | `.gitignore` pattern `.toolery/** */` has a space; `.toolery/history.json` committed | open | tasks P1-1 |
+| B-2b | high | `npm pack --dry-run` exits 0 without `dist/` → CI pack smoke test cannot catch broken builds | **fixed 2026-09-26** | PR #3 (P0-2) |
+| B-3 | blocker | Ollama native adapter fails all scenarios for 1b–9b models (num_ctx truncation) | **fixed 2026-09-26** | PR #1 (author-merged) |
+| B-4 | blocker | No headless mode; Ink crashes in non-TTY (`Raw mode is not supported`) | **fixed 2026-09-26** | PR #4 (P0-4) |
+| B-5 | blocker | package.json missing repository/bugs/homepage; no prepublishOnly guard | **fixed 2026-09-26** | PR #3 (P0-5) |
+| B-6 | high | `--source upstream` unsynced → raw `ENOENT manifest.json` instead of friendly guidance (existsSync dir check bypassed by NOTICE.md) | **fixed 2026-09-26** | PR #5 (P1-3) |
+| B-7 | medium | `.gitignore` pattern `.toolery/** */` has a space; `.toolery/history.json` committed | **fixed 2026-09-26** | PR #2 (P1-1) |
 | B-8 | medium | Test coverage thin (adapters, resume, config, export, McNemar untested) | open | tasks P1-4 |
 | B-9 | low | `mcnemar` `2**discordant` overflows → NaN for discordant > 1023 | open | tasks P2-4 |
 | B-10 | low | Mock adapter scores 12.5% on easy tier (scripted coverage gaps) — makes smoke-run interpretation confusing | open | — |
 
 ## 4. Bugs Fixed
 
-*(none recorded yet — append entries here as: date · symptom · root cause · fix commit)*
+- 2026-09-26 · B-1 fresh-clone build emits no `dist/` · committed `tsconfig.tsbuildinfo` + `incremental: true` made build a no-op · PR #2 (untracked + ignored)
+- 2026-09-26 · B-2b pack smoke test toothless (exit 0 on missing `dist/`) · `npm pack --dry-run` never fails on absent files · PR #3 (`scripts/pack-check.mjs` asserts tarball contents)
+- 2026-09-26 · B-3 Ollama 1b–9b models fail every scenario · default `num_ctx` 2048 left-truncates system prompt + 18-tool catalog · PR #1 (`num_ctx: 8192` default, `seed: 0`, `keep_alive`)
+- 2026-09-26 · B-4 `run` crashes non-TTY · Ink TUI rendered unconditionally, raw mode unsupported without TTY · PR #4 (`src/headless.ts`, stdin.isTTY auto-detect + `--headless`)
+- 2026-09-26 · B-5 npm publish metadata incomplete · missing repository/bugs/homepage + no publish guard · PR #3 (metadata + `prepublishOnly` chain)
+- 2026-09-26 · B-6 raw `ENOENT manifest.json` on unsynced upstream · dir-level `existsSync` bypassed by NOTICE.md-only dir · PR #5 (check `manifest.json` directly, friendly guidance)
+- 2026-09-26 · B-7 `.toolery/` ignore pattern broken · stray space in `.toolery/** */` made it a no-op; 6.9 MB run state committed · PR #2 (pattern fixed, state untracked)
 
 ## 5. Key Learnings (append-only)
 
@@ -58,7 +64,7 @@
 - Node >= 20 required (`engines`); dev/CI verified on Node 24. ESM only; relative imports need `.js` extensions.
 - Command gate: `npm run typecheck && npm run lint && npm test && npm run build` (+ `npm run pack:check` for release).
 - `npm run sync:upstream` needs network to api.github.com / raw.githubusercontent.com; writes 143 YAMLs + `manifest.json` into `vendor/toolery-upstream/` (untracked).
-- Env-var config surface: `TOOLERY_SOURCE, TIER, TRIALS, ADAPTER, CONCURRENCY, TIMEOUT_MS, CLUSTER, MODEL, BASE_URL, API_KEY, PROFILE, BENCHMARK_VERSION, OUTPUT, RESUME, UPSTREAM_DIR` (+ `NUM_CTX, KEEP_ALIVE` once P0-3 merges).
+- Env-var config surface: `TOOLERY_SOURCE, TIER, TRIALS, ADAPTER, CONCURRENCY, TIMEOUT_MS, CLUSTER, MODEL, BASE_URL, API_KEY, PROFILE, BENCHMARK_VERSION, OUTPUT, RESUME, UPSTREAM_DIR, NUM_CTX, KEEP_ALIVE` (last two active since PR #1 merged).
 - Offline testing pattern: `MockAdapter`/`ScriptedMockAdapter` for scoring paths; a local `node:http` server for adapter HTTP parsing tests — never real endpoints in CI.
 - Docs site: `website/` (VitePress, own package.json) — `npm run docs:dev` / `docs:build`; excluded from the npm package.
 
@@ -66,3 +72,4 @@
 
 - 2026-09-26 — Full external audit of main `970eb29`: verified pipeline end-to-end, found B-1…B-7, wrote `prd.md`, `architecture.md`, `rules.md`, `design.md`, `tasks.md`, `memory.md`.
 - 2026-09-26 (session 2) — Drafted P0 fix branches: `fix/fresh-clone-build` (B-1/B-7, re-clone verified), `fix/publish-readiness` (B-2b + P0-5), `feat/headless-run` (B-4), `fix/upstream-sync-error` (B-6). **Retracted B-2** (CI trigger "corruption") after `od -c` proved it a display artifact; replaced with B-2b (pack gate toothless). Docs corrected accordingly.
+- 2026-09-26 (session 3) — Pushed main + branches, opened PRs #2–#5 (all CI-green), discovered author had already merged PR #1; rebased everything onto merged main, merged #2–#5, deleted all fix branches, released **v0.4.2** (docs ticked, version bumped, `prepublishOnly` gate green, tag + GitHub Release). `npm publish` left to maintainer.

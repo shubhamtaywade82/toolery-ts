@@ -116,6 +116,19 @@ npm run build
 npm run pack:check
 ```
 
+## Changelog
+
+### 0.4.2 (2026-09-26)
+
+- **Fixed** — fresh-clone builds: `tsconfig.tsbuildinfo` is no longer committed; a clean clone now emits `dist/` (PR #2).
+- **Fixed** — Ollama adapter context overflow: `num_ctx: 8192` default, `--num-ctx` / `TOOLERY_NUM_CTX`, `--keep-alive`, `seed: 0` — small (1b–9b) models no longer silently fail every scenario (PR #1).
+- **Added** — headless non-TTY run mode: auto-activates when stdin is not a TTY, or force with `--headless`; per-scenario progress lines, tier summary, `--output` snapshots, meaningful exit codes — safe for CI, Docker and pipes. Also propagates `--source` and requires `--model` for non-mock adapters (PR #4).
+- **Fixed** — pack smoke test hardened: `scripts/pack-check.mjs` fails when the tarball lacks the CLI/entry files; `prepublishOnly` additionally enforces the synced 143-scenario upstream suite (PR #3).
+- **Fixed** — npm publish metadata: `repository` / `bugs` / `homepage` added (PR #3).
+- **Fixed** — friendly error when the upstream scenario pack is not synced, pointing at `npm run sync:upstream` (PR #5).
+- **Repo hygiene** — `.gitignore` typo fixed; 6.9 MB of local run state untracked (PR #2).
+- **Docs** — AI-assisted development context files (`prd.md`, `architecture.md`, `rules.md`, `design.md`, `tasks.md`, `memory.md`).
+
 ## Provenance
 
 The upstream benchmark is MIT licensed. Vendored upstream scenario data must retain the upstream copyright/license notice; `vendor/toolery-upstream/NOTICE.md` records the provenance.
