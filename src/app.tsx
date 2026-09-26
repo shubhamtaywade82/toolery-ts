@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Box, Text, useApp, useInput } from 'ink';
+import { Box, Text, useApp, useInput, useWindowSize } from 'ink';
 import {
   Page, Tabs, Panel, Columns, KeyValue, Badge, Pill, ProgressBar,
   Spinner, StatusMessage, Alert, Table, SelectableRow, TextInput,
@@ -156,8 +156,10 @@ export function App({ config }: { config: BenchmarkConfig }) {
 
   useAppNav({ tab, setTab, editing, onRun: startRun, onProbe: () => void trigger(cfg.baseUrl, cfg.apiKey), onCycleModel: cycleModel });
 
+  const { columns, rows } = useWindowSize();
+
   return (
-    <Page title="Toolery-TS" icon="🔧" scope={`v${cfg.benchmarkVersion} · ${cfg.adapter}`} count={scenarios.length} noun="scenario"
+    <Page width={Math.max(columns || 80, 80)} height={Math.max(rows || 24, 24)} title="Toolery-TS" icon="🔧" scope={`v${cfg.benchmarkVersion} · ${cfg.adapter}`} count={scenarios.length} noun="scenario"
       status={{ text: probing ? 'Probing...' : probe.reachable ? `ONLINE (${probe.latencyMs}ms · ${probe.models?.length ?? 0} models)` : 'OFFLINE', tone: probing ? 'busy' : probe.reachable ? 'news' : 'quiet' }}
       tabs={<Tabs active={tab} items={TABS.map(t => ({ value: t, label: t }))} />} hints={getHints(tab, editing)}>
       {runner.error && <Alert variant="error" title="Execution Error"><Text>{runner.error}</Text></Alert>}
