@@ -185,10 +185,10 @@ npm start -- tui --model qwen2.5:4b
 | <kbd>p</kbd> | Global | Trigger endpoint health probe & model detection |
 | <kbd>m</kbd> | Global | Cycle through models discovered by the probe |
 | <kbd>q</kbd> | Global | Quit Toolery |
-| <kbd>↑</kbd> / <kbd>↓</kbd> | Settings | Navigate configuration fields |
-| <kbd>Enter</kbd> | Settings | Edit text field (`Base URL`, `API Key`, `Model`) |
-| <kbd>→</kbd> / <kbd>←</kbd> | Settings | Cycle provider presets, adapters, tiers, or adjust numbers |
-| <kbd>Esc</kbd> | Settings | Cancel field editing or return to Home tab |
+| <kbd>Ctrl+C</kbd> × 2 | Global | Quit Toolery (press twice within 2 seconds) |
+| <kbd>Enter</kbd> | Settings | Open selection dialog or text input for selected field |
+| <kbd>Space</kbd> | Settings Dialog | Toggle selection in multi-select dialogs (e.g. Models) |
+| <kbd>Esc</kbd> | Global / Settings | Close active dialog / return to Home tab (does not exit) |
 
 ## Benchmark integrity
 

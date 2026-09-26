@@ -9,4 +9,4 @@ const config=parseConfig(cli.flags);
 // benchmarked the synthetic pack while the snapshot claimed source=upstream).
 process.env.TOOLERY_SOURCE=config.source;
 if(command==='run'&&(cli.flags.headless===true||process.stdin.isTTY!==true)){await runHeadless(config);process.exit(0);}
-render(<App config={config}/>,{alternateScreen:true});}catch(error){console.error(error instanceof Error?error.message:String(error));process.exit(1);}
+render(<App config={config}/>,{alternateScreen:true,exitOnCtrlC:false});}catch(error){console.error(error instanceof Error?error.message:String(error));process.exit(1);}
