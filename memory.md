@@ -7,14 +7,15 @@
 - **Version**: package `0.4.1` @ main `970eb29`; benchmark contract `1.0.0`.
 - **Status**: MVP functionally complete and verified, **NOT npm-published** — 5 publish blockers open (see tasks.md P0).
 - **Verified working** (fresh audit, not assumed): typecheck (strict) ✅ · tests 10/10 ✅ · lint 0 errors / 40 `any` warnings ✅ · full benchmark pipeline against a live OpenAI-compatible endpoint (probe → parseConfig → ScenarioRunner → multi-turn tool loop → contract scoring → 18-dimension aggregation → snapshot → CSV export) ✅ · upstream sync (143 scenarios, SHA-256 manifest, tier split 40/45/34/24) ✅ · McNemar implementation mathematically correct ✅ · probe exit codes correct ✅.
-- **Broken**: fresh-clone `npm run build` emits no `dist/` (see D-1). CI never runs (D-2). Native Ollama adapter fails small models on main (D-3). `run` crashes in non-TTY (D-5).
+- **Broken**: fresh-clone `npm run build` emits no `dist/` (see D-1). Native Ollama adapter fails small models on main (D-3). `run` crashes in non-TTY (D-5). CI runs on main and is green, but its "Package smoke test" cannot fail on a missing `dist/` (see D-2b).
 - **Upstream scenarios are NOT in git by design** — `vendor/toolery-upstream/` holds only `NOTICE.md`; `npm run sync:upstream` fetches the 143 YAMLs into it (network required). The npm tarball is expected to ship them (files whitelist already includes the dir) once prepublish runs sync.
 - **Unmerged branch**: `fix/ollama-adapter-context-window` (1 commit ahead of main) — the P0-3 critical fix. Do not build new work on main's OllamaAdapter that conflicts with it.
 
 ## 2. Key Decisions (append-only — never delete, supersede with a new entry)
 
 - **D-1 (2026-09, audit)** — `tsconfig.tsbuildinfo` was committed to git in commit `b09e044`. With `incremental: true`, fresh clones build nothing. Decision: remove from git, ignore `*.tsbuildinfo`. *Rule for the AI: never commit build caches.*
-- **D-2 (2026-09, audit)** — both GitHub workflow triggers were corrupted to `branches: ain]` (mangled `[main]`), so CI/docs silently never ran on main — which is exactly how D-1 escaped notice. Decision: fix triggers; treat "CI green on main" as a publish prerequisite.
+- **D-2 (2026-09, audit) — RETRACTED, see D-2b** — initially recorded the CI/docs workflow triggers as corrupted (`branches: ain]`). That was a terminal display artifact that ate the `[m` sequence; raw bytes at `origin/main` were always `branches: [main]` (verified via `od -c`). Lesson: always verify suspicious raw bytes with an escape-safe dump (`od -c` / `git show | od`) before reporting.
+- **D-2b (2026-09, audit)** — the REAL CI gap: `npm pack --dry-run` exits 0 with a 6-file tarball even when `dist/` doesn't exist, so the CI "Package smoke test" step passes green on broken builds — exactly how D-1 escaped CI. Decision: add `scripts/pack-check.mjs` asserting `dist/cli.js` + `dist/index.js` in the tarball; `prepublishOnly` additionally enforces the synced vendor suite via `--require-upstream`. (Branch `fix/publish-readiness`.)
 - **D-3 (2026-09, unmerged branch)** — Ollama silently left-truncates context when the default `num_ctx` (often 2048 in Modelfiles) is smaller than the 18-tool catalog + system prompt, making every scenario fail for 1b–9b models. Decision: adapter sets `num_ctx: 8192` default (overridable `--num-ctx`, min 512), `keep_alive: 30m`, `seed: 0`. Waiting on merge (P0-3).
 - **D-4 (2026-09)** — Native Ollama transport uses the author's own `@nemesis-oss/ollama-sdk` (v1.3, 3 versions, zero deps) rather than the official `ollama` package. Rationale: author-controlled, tool-calling focused. Risk: single-maintainer dependency for the flagship adapter. Re-evaluate at P2-2; do not swap without recording the outcome here.
 - **D-5 (2026-09, audit)** — `run` and `tui` are currently the same thing: both render the Ink TUI and require a keypress (`r`) to start, crashing without a TTY. Decision: add headless mode (P0-4) — non-TTY detection or `--no-tui`; README examples already read as if headless exists.
@@ -29,7 +30,8 @@
 | ID | Severity | Summary | Status | Fix path |
 |---|---|---|---|---|
 | B-1 | blocker | Committed `tsconfig.tsbuildinfo` breaks fresh-clone builds | open | tasks P0-1 |
-| B-2 | blocker | CI + docs triggers `branches: ain]` never fire on main | open | tasks P0-2 |
+| B-2 | ~~blocker~~ **RETRACTED** | "CI triggers corrupted `branches: ain]`" — false positive from terminal display artifact; raw bytes were always `[main]` (od -c verified) | retracted | — |
+| B-2b | high | `npm pack --dry-run` exits 0 without `dist/` → CI pack smoke test cannot catch broken builds | fix drafted | branch `fix/publish-readiness` (P0-2) |
 | B-3 | blocker | Ollama native adapter fails all scenarios for 1b–9b models (num_ctx truncation) | fix exists unmerged | tasks P0-3 |
 | B-4 | blocker | No headless mode; Ink crashes in non-TTY (`Raw mode is not supported`) | open | tasks P0-4 |
 | B-5 | blocker | package.json missing repository/bugs/homepage; no prepublishOnly guard | open | tasks P0-5 |
@@ -49,7 +51,7 @@
 - **L-2** — Ink's `useInput` requires raw-mode TTY stdin; any CLI that defaults to launching a TUI must detect `process.stdin.isTTY` before rendering. Batch/CI users pipe stdin constantly.
 - **L-3** — Ollama truncates from the left silently when `num_ctx` is exceeded (drops system prompt + tool definitions) rather than erroring. Any Ollama tool-calling harness must set `num_ctx` explicitly, especially for small models whose Modelfiles default to 2048.
 - **L-4** — Upstream scenario data can disagree with its own directory layout (empirical re-tiering). Trust the parsed `tier` field, not the path; hard-count guards (143) catch import drift early.
-- **L-5** — A corrupted CI trigger is worse than no CI: it *looks* configured while validating nothing. After any workflow edit, confirm a run actually executed on the intended branch.
+- **L-5** — Terminal-rendered `[` + letter sequences can be silently eaten in tool output (seen twice: `const [history` → `const istory`; `branches: [main]` → `branches: ain]`). Always verify suspicious bytes with `od -c` / `git show | od -c` before declaring a bug. Corollary: a green-but-toothless CI gate (exit 0 on missing artifacts) is as dangerous as no CI — assert concrete artifacts, not exit codes.
 
 ## 6. Environment & Verification Facts
 
@@ -63,3 +65,4 @@
 ## 7. Session Log (append one line per work session)
 
 - 2026-09-26 — Full external audit of main `970eb29`: verified pipeline end-to-end, found B-1…B-7, wrote `prd.md`, `architecture.md`, `rules.md`, `design.md`, `tasks.md`, `memory.md`.
+- 2026-09-26 (session 2) — Drafted P0 fix branches: `fix/fresh-clone-build` (B-1/B-7, re-clone verified), `fix/publish-readiness` (B-2b + P0-5), `feat/headless-run` (B-4), `fix/upstream-sync-error` (B-6). **Retracted B-2** (CI trigger "corruption") after `od -c` proved it a display artifact; replaced with B-2b (pack gate toothless). Docs corrected accordingly.
