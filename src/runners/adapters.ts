@@ -1,6 +1,6 @@
 import type {AdapterRequest,AdapterResponse,AdapterKind,LlmAdapter,ToolCall} from '../types.js';
 import {OllamaClient} from '@nemesis-oss/ollama-sdk';
-export interface AdapterOptions{baseUrl:string;apiKey?:string;timeoutMs:number;}
+export interface AdapterOptions{baseUrl:string;apiKey?:string;timeoutMs:number;numCtx?:number;keepAlive?:string;}
 function safeJsonObject(value:unknown):Record<string,unknown>{if(value&&typeof value==='object'&&!Array.isArray(value))return value as Record<string,unknown>;if(typeof value!=='string')return{};try{const parsed:unknown=JSON.parse(value);return parsed&&typeof parsed==='object'&&!Array.isArray(parsed)?parsed as Record<string,unknown>:{};}catch{return{};}}
 function formatOpenAIMessages(messages: any[]) {
   return messages.map(m => {
@@ -44,9 +44,17 @@ export class CloudAdapter extends OpenAICompatibleAdapter{readonly kind:AdapterK
 export class OllamaAdapter implements LlmAdapter{
   readonly kind:AdapterKind='ollama';
   private readonly client:OllamaClient;
+  private readonly numCtx:number;
+  private readonly keepAlive:string|number;
   constructor(options:AdapterOptions){
     const baseUrl=options.baseUrl.replace(/\/v1\/?$/,'');
-    this.client=new OllamaClient({baseUrl,timeoutMs:options.timeoutMs});
+    this.client=new OllamaClient({baseUrl,apiKey:options.apiKey,timeoutMs:options.timeoutMs});
+    // Default num_ctx to 8192 so the full tool catalog + system prompt + conversation
+    // fits within the context window of small (1b-9b) local models, whose Ollama
+    // Modelfile default (often 2048) silently truncates tool definitions and causes
+    // every benchmark scenario to fail. Overridable via AdapterOptions.numCtx.
+    this.numCtx=options.numCtx??8192;
+    this.keepAlive=options.keepAlive??'30m';
   }
   async complete(request:AdapterRequest):Promise<AdapterResponse>{
     const started=performance.now();
@@ -56,7 +64,9 @@ export class OllamaAdapter implements LlmAdapter{
       return{role:m.role as 'system'|'user'|'assistant',content:m.content??''};
     });
     const tools=request.tools.map(t=>({type:'function' as const,function:{name:t.name,description:t.description,parameters:t.parameters as any}}));
-    const res=await this.client.chat({model:request.model,messages,tools:tools.length?tools:undefined,options:{temperature:request.temperature??0}});
+    // num_ctx + seed ensure small models receive the full untruncated tool catalog and
+    // produce deterministic output (temperature is already 0 from the runner).
+    const res=await this.client.chat({model:request.model,messages,tools:tools.length?tools:undefined,options:{temperature:request.temperature??0,num_ctx:this.numCtx,seed:0},keep_alive:this.keepAlive});
     const toolCalls:ToolCall[]=(res.message.tool_calls??[]).map(c=>({id:c.id,name:c.function?.name??'',arguments:safeJsonObject(c.function?.arguments)})).filter(c=>c.name);
     return{text:res.message.content||'',toolCalls,durationMs:res.total_duration?res.total_duration/1e6:performance.now()-started,inputTokens:res.prompt_eval_count,outputTokens:res.eval_count,finishReason:res.done_reason||(toolCalls.length?'tool_calls':'stop'),raw:res};
   }

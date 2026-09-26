@@ -33,8 +33,11 @@ The importer is pinned to upstream commit `36c8c0c217898aade7500fa13b02fdc4d5889
 ## CLI
 
 ```bash
-# Local Ollama / vLLM / llama.cpp style endpoint (run and tui are equivalent)
-toolery run --model qwen2.5:4b --base-url http://localhost:11434/v1 --source synthetic --tier all --trials 3
+# Local Ollama native endpoint (default adapter since 0.4.1)
+toolery run --model qwen2.5:1.5b --adapter ollama --base-url http://localhost:11434 --source synthetic --tier all --trials 3
+
+# OpenAI-compatible endpoint (vLLM / llama.cpp / LMStudio / Ollama /v1)
+toolery run --model qwen2.5:4b --adapter openai-compatible --base-url http://localhost:11434/v1 --source synthetic --tier all --trials 3
 toolery tui  --model qwen2.5:4b --base-url http://localhost:11434/v1
 
 # Exact upstream benchmark after sync
@@ -45,6 +48,23 @@ toolery scenarios --source upstream --tier very-hard
 toolery profiles
 toolery probe --base-url http://localhost:11434/v1
 toolery export --input results.json --output results.csv
+```
+
+### Context window for small models (1b-9b)
+
+When using the `ollama` adapter with small local models (1b-9b parameters), the
+default Ollama `num_ctx` (often 2048 from the Modelfile) is too small to hold the
+full 18-tool catalog plus system prompt and conversation history. Ollama silently
+truncates from the left, dropping the system prompt and causing every scenario to
+fail. Toolery now sets `num_ctx: 8192` by default, and exposes `--num-ctx` /
+`TOOLERY_NUM_CTX` to override it:
+
+```bash
+# Increase context for larger tool catalogs or longer multi-turn scenarios
+toolery run --model qwen2.5:7b --adapter ollama --num-ctx 16384 --tier all
+
+# Keep the model warm between scenarios (default: 30m)
+toolery run --model qwen2.5:7b --adapter ollama --keep-alive 60m --tier all
 ```
 
 ## Benchmark integrity
