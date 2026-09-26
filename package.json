@@ -24,7 +24,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src tests",
     "clean": "rm -rf dist",
-    "pack:check": "npm run build && npm pack --dry-run",
+    "pack:check": "npm run build && node scripts/pack-check.mjs",
+    "prepublishOnly": "npm run typecheck && npm run lint && npm test && npm run sync:upstream && npm run build && node scripts/pack-check.mjs --require-upstream",
     "sync:upstream": "node scripts/sync-upstream-scenarios.mjs",
     "docs:install": "npm install --prefix website",
     "docs:dev": "npm run dev --prefix website",
@@ -44,6 +45,14 @@
   ],
   "author": "Shubham Taywade",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shubhamtaywade82/toolery-ts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shubhamtaywade82/toolery-ts/issues"
+  },
+  "homepage": "https://github.com/shubhamtaywade82/toolery-ts#readme",
   "engines": {
     "node": ">=20"
   },
