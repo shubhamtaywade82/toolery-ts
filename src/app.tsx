@@ -193,8 +193,8 @@ function useAppNav({ tab, setTab, editing, exitPending, setExitPending, onRun, o
 function getHints(tab: Tab, editing: boolean, exitPending = false): [string, string][] {
   if (exitPending) return [['Ctrl+C / c', 'Confirm Exit'], ['Esc', 'Cancel']];
   if (editing) return [['Enter', 'Confirm/Save'], ['Space', 'Toggle'], ['Esc', 'Cancel']];
-  if (tab === 'Settings') return [['↑/↓', 'Select'], ['Enter', 'Open Dialog'], ['p', 'Probe'], ['r', 'Run'], ['q', 'Quit']];
-  return [['←/→', 'Tabs'], ['s', 'Settings'], ['p', 'Probe'], ['m', 'Model'], ['r', 'Run'], ['q', 'Quit']];
+  if (tab === 'Settings') return [['↑/↓', 'Select'], ['Enter', 'Open Dialog'], ['p', 'Probe'], ['r', 'Run']];
+  return [['←/→', 'Tabs'], ['s', 'Settings'], ['p', 'Probe'], ['m', 'Model'], ['r', 'Run']];
 }
 
 function formatArgs(args: Record<string, unknown>): string {
@@ -466,6 +466,8 @@ export function App({ config }: { config: BenchmarkConfig }) {
   return (
     <Page width={Math.max(columns || 80, 80)} height={Math.max(rows || 24, 24)} title="Toolery-TS" icon="🔧" scope={`v${cfg.benchmarkVersion} · ${cfg.adapter}`} count={scenarios.length} noun="scenario"
       status={statusObj}
+      page={exitPending || editing ? undefined : 'root'}
+      help={!exitPending && !editing}
       tabs={<Tabs active={tab} items={TABS.map(t => ({ value: t, label: t }))} />} hints={getHints(tab, editing, exitPending)}>
       {runner.error && <Alert variant="error" title="Execution Error"><Text>{runner.error}</Text></Alert>}
       {renderTab({ tab, cfg, setCfg, sfocus, setSfocus, setEditing, presetId, setPresetId, probe, probing, trigger, runner, scenarios, logs })}
