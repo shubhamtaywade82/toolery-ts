@@ -11,8 +11,8 @@ import { PROFILES } from './profiles.js';
 import { probeEndpoint } from './probe.js';
 import { formatSummary } from './export.js';
 import { buildRanking } from './rankings.js';
-import { appendHistory, loadHistory } from './history.js';
-import type { BenchmarkConfig, BenchmarkSummary, HealthProbe, RunResult, Scenario, TrialResult, CapabilityName } from './types.js';
+import { appendHistory, loadHistory, type HistoryRun } from './history.js';
+import type { BenchmarkConfig, BenchmarkSummary, HealthProbe, RunResult, Scenario, TrialResult, CapabilityName, Tier, AdapterKind } from './types.js';
 
 type Tab = 'Home' | 'Scenarios' | 'Run' | 'Results' | 'Rankings' | 'Compare' | 'Profiles' | 'History' | 'Settings';
 const TABS = ['Home', 'Scenarios', 'Run', 'Results', 'Rankings', 'Compare', 'Profiles', 'History', 'Settings'] as const;
@@ -78,7 +78,7 @@ function useRunner(cfg: BenchmarkConfig, scenarios: Scenario[]) {
   const [results, setResults] = useState<RunResult[]>([]);
   const [current, setCurrent] = useState<RunResult | undefined>();
   const [summary, setSummary] = useState<BenchmarkSummary | undefined>();
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<HistoryRun[]>([]);
   const [error, setError] = useState<string | undefined>();
   useEffect(() => { void loadHistory().then(setHistory); }, []);
 
@@ -102,7 +102,8 @@ function useRunner(cfg: BenchmarkConfig, scenarios: Scenario[]) {
   return { running, results, current, summary, history, error, execute };
 }
 
-function useAppNav({ tab, setTab, editing, onRun, onProbe, onCycleModel }: any) {
+interface AppNavProps { tab: Tab; setTab: (t: Tab) => void; editing: boolean; onRun: () => void; onProbe: () => void; onCycleModel: () => void; }
+function useAppNav({ tab, setTab, editing, onRun, onProbe, onCycleModel }: AppNavProps) {
   const { exit } = useApp();
   useInput((input, key) => {
     if (editing) return;
@@ -138,7 +139,8 @@ export function App({ config }: { config: BenchmarkConfig }) {
   }, [probe.models]);
 
   const cyclePreset = (dir: number) => {
-    const ids = PRESETS.map(p => p.id), nextId = ids[(Math.max(0, ids.indexOf(presetId as any)) + dir + ids.length) % ids.length];
+    const ids: readonly string[] = PRESETS.map(p => p.id);
+    const nextId = ids[(Math.max(0, ids.indexOf(presetId)) + dir + ids.length) % ids.length] ?? 'custom';
     setPresetId(nextId); const p = PRESETS.find(x => x.id === nextId);
     if (p && p.id !== 'custom') { setCfg(c => ({ ...c, baseUrl: p.baseUrl, adapter: p.adapter })); void trigger(p.baseUrl, cfg.apiKey); }
   };
@@ -164,7 +166,35 @@ export function App({ config }: { config: BenchmarkConfig }) {
   );
 }
 
-function renderTab(p: any) {
+interface RunnerState {
+  running: boolean;
+  results: RunResult[];
+  current?: RunResult;
+  summary?: BenchmarkSummary;
+  history: HistoryRun[];
+  error?: string;
+  execute: (modelsToRun: string[]) => Promise<void>;
+}
+
+interface RenderTabProps {
+  tab: Tab;
+  cfg: BenchmarkConfig;
+  setCfg: React.Dispatch<React.SetStateAction<BenchmarkConfig>>;
+  sfocus: number;
+  setSfocus: React.Dispatch<React.SetStateAction<number>>;
+  editing: boolean;
+  setEditing: React.Dispatch<React.SetStateAction<boolean>>;
+  presetId: string;
+  setPresetId: React.Dispatch<React.SetStateAction<string>>;
+  cyclePreset: (dir: number) => void;
+  probe: HealthProbe;
+  probing: boolean;
+  trigger: (url?: string, key?: string) => Promise<HealthProbe | null>;
+  runner: RunnerState;
+  scenarios: Scenario[];
+}
+
+function renderTab(p: RenderTabProps) {
   const { tab, cfg, setCfg, sfocus, setSfocus, editing, setEditing, presetId, setPresetId, cyclePreset, probe, probing, trigger, runner, scenarios } = p;
   if (tab === 'Home') return <HomeView cfg={cfg} probe={probe} results={runner.results} total={scenarios.length} running={runner.running} current={runner.current} summary={runner.summary} presetId={presetId} />;
   if (tab === 'Scenarios') return <ScenariosView scenarios={scenarios} results={runner.results} />;
@@ -177,12 +207,25 @@ function renderTab(p: any) {
   return <SettingsView cfg={cfg} setCfg={setCfg} sfocus={sfocus} setSfocus={setSfocus} editing={editing} setEditing={setEditing} presetId={presetId} setPresetId={setPresetId} cyclePreset={cyclePreset} probe={probe} probing={probing} trigger={trigger} />;
 }
 
-function HomeView({ cfg, probe, results, total, running, current, summary, presetId }: any) {
+interface HomeViewProps {
+  cfg: BenchmarkConfig;
+  probe: HealthProbe;
+  results: RunResult[];
+  total: number;
+  running: boolean;
+  current?: RunResult;
+  summary?: BenchmarkSummary;
+  presetId: string;
+}
+
+interface RecentRow extends Record<string, unknown> { id: string; tier: string; status: string; duration: string; }
+
+function HomeView({ cfg, probe, results, total, running, current, summary, presetId }: HomeViewProps) {
   const pName = PRESETS.find(p => p.id === presetId)?.name ?? 'Custom';
   const recentData = results.slice(-4).map((r: RunResult) => ({
     id: r.scenarioId, tier: r.tier, status: r.trials.at(-1)?.success ? 'PASS' : 'FAIL', duration: `${((r.trials.at(-1)?.durationMs ?? 0) / 1000).toFixed(1)}s`
   }));
-  const recentCols: Column<any>[] = [
+  const recentCols: Column<RecentRow>[] = [
     { key: 'id', header: 'Scenario ID', width: 22 }, { key: 'tier', header: 'Tier', width: 10 }, { key: 'status', header: 'Status', width: 8 }, { key: 'duration', header: 'Duration', width: 10 }
   ];
   return (
@@ -224,7 +267,22 @@ function TracePanel({ trial }: { trial?: TrialResult }) {
   );
 }
 
-function SettingsView({ cfg, setCfg, sfocus, setSfocus, editing, setEditing, presetId, setPresetId, cyclePreset, probe, probing, trigger }: any) {
+interface SettingsViewProps {
+  cfg: BenchmarkConfig;
+  setCfg: React.Dispatch<React.SetStateAction<BenchmarkConfig>>;
+  sfocus: number;
+  setSfocus: React.Dispatch<React.SetStateAction<number>>;
+  editing: boolean;
+  setEditing: React.Dispatch<React.SetStateAction<boolean>>;
+  presetId: string;
+  setPresetId: React.Dispatch<React.SetStateAction<string>>;
+  cyclePreset: (dir: number) => void;
+  probe: HealthProbe;
+  probing: boolean;
+  trigger: (url?: string, key?: string) => Promise<HealthProbe | null>;
+}
+
+function SettingsView({ cfg, setCfg, sfocus, setSfocus, editing, setEditing, presetId, setPresetId, cyclePreset, probe, probing, trigger }: SettingsViewProps) {
   const pName = PRESETS.find(p => p.id === presetId)?.name ?? 'Custom';
   const curField = FIELDS[sfocus];
   useInput((_input, key) => {
@@ -235,13 +293,13 @@ function SettingsView({ cfg, setCfg, sfocus, setSfocus, editing, setEditing, pre
     if (key.rightArrow || key.leftArrow) {
       const dir = key.rightArrow ? 1 : -1;
       if (curField.id === 'preset') cyclePreset(dir);
-      if (curField.id === 'adapter') { const a = ['ollama', 'openai-compatible', 'mock', 'cloud', 'raw', 'hermes']; const next = a[(a.indexOf(cfg.adapter) + dir + a.length) % a.length]; const p = PRESETS.find(x => x.adapter === next); if (p) setPresetId(p.id); setCfg((c: any) => ({ ...c, adapter: next, baseUrl: p?.baseUrl || c.baseUrl })); }
-      if (curField.id === 'tier') { const t = ['all', 'easy', 'medium', 'hard', 'very-hard']; setCfg((c: any) => ({ ...c, tier: t[(t.indexOf(c.tier) + dir + t.length) % t.length] })); }
-      if (curField.id === 'trials') setCfg((c: any) => ({ ...c, trials: Math.max(1, Math.min(10, c.trials + dir)) }));
-      if (curField.id === 'concurrency') setCfg((c: any) => ({ ...c, concurrency: Math.max(1, Math.min(8, c.concurrency + dir)) }));
-      if (curField.id === 'timeoutMs') setCfg((c: any) => ({ ...c, timeoutMs: Math.max(10_000, Math.min(600_000, c.timeoutMs + dir * 30_000)) }));
-      if (curField.id === 'numCtx') setCfg((c: any) => ({ ...c, numCtx: Math.max(512, Math.min(131072, (c.numCtx ?? 8192) + dir * 2048)) }));
-      if (curField.id === 'withPerf') setCfg((c: any) => ({ ...c, withPerf: !c.withPerf }));
+      if (curField.id === 'adapter') { const a: AdapterKind[] = ['ollama', 'openai-compatible', 'mock', 'cloud', 'raw', 'hermes']; const next = a[(a.indexOf(cfg.adapter) + dir + a.length) % a.length]!; const p = PRESETS.find(x => x.adapter === next); if (p) setPresetId(p.id); setCfg(c => ({ ...c, adapter: next, baseUrl: p?.baseUrl || c.baseUrl })); }
+      if (curField.id === 'tier') { const t: Array<Tier | 'all'> = ['all', 'easy', 'medium', 'hard', 'very-hard']; setCfg(c => ({ ...c, tier: t[(t.indexOf(c.tier) + dir + t.length) % t.length]! })); }
+      if (curField.id === 'trials') setCfg(c => ({ ...c, trials: Math.max(1, Math.min(10, c.trials + dir)) }));
+      if (curField.id === 'concurrency') setCfg(c => ({ ...c, concurrency: Math.max(1, Math.min(8, c.concurrency + dir)) }));
+      if (curField.id === 'timeoutMs') setCfg(c => ({ ...c, timeoutMs: Math.max(10_000, Math.min(600_000, c.timeoutMs + dir * 30_000)) }));
+      if (curField.id === 'numCtx') setCfg(c => ({ ...c, numCtx: Math.max(512, Math.min(131072, (c.numCtx ?? 8192) + dir * 2048)) }));
+      if (curField.id === 'withPerf') setCfg(c => ({ ...c, withPerf: !c.withPerf }));
     }
   });
 
@@ -249,16 +307,20 @@ function SettingsView({ cfg, setCfg, sfocus, setSfocus, editing, setEditing, pre
     <Columns gap={1}>
       <Box width="52%" flexDirection="column">
         <Panel title="⚙ Control Panel · Configuration" focused>
-          {FIELDS.map((f, i) => (
-            <SelectableRow key={f.id} active={i === sfocus} marker=">">
-              <Box width={18}><Text bold={i === sfocus} color={i === sfocus ? 'cyan' : 'gray'}>{f.label}</Text></Box>
-              {i === sfocus && editing && (f.id === 'baseUrl' || f.id === 'apiKey' || f.id === 'model') ? (
-                <TextInput defaultValue={String((cfg as any)[f.id] ?? '')} onSubmit={(v) => { setCfg((c: any) => ({ ...c, [f.id]: v })); setEditing(false); if (f.id !== 'model') void trigger(f.id === 'baseUrl' ? v : cfg.baseUrl, f.id === 'apiKey' ? v : cfg.apiKey); }} onCancel={() => setEditing(false)} />
-              ) : (
-                <Text bold={i === sfocus}>{f.id === 'preset' ? pName : f.id === 'apiKey' ? maskKey(cfg.apiKey) : f.id === 'timeoutMs' ? `${Math.round(cfg.timeoutMs / 1000)}s` : f.id === 'numCtx' ? `${cfg.numCtx ?? 8192}` : f.id === 'withPerf' ? (cfg.withPerf ? 'enabled' : 'disabled') : String((cfg as any)[f.id] ?? '')}</Text>
-              )}
-            </SelectableRow>
-          ))}
+          {FIELDS.map((f, i) => {
+            const textVal = f.id === 'baseUrl' ? cfg.baseUrl : f.id === 'apiKey' ? (cfg.apiKey ?? '') : cfg.model;
+            const displayVal = f.id === 'preset' ? pName : f.id === 'apiKey' ? maskKey(cfg.apiKey) : f.id === 'timeoutMs' ? `${Math.round(cfg.timeoutMs / 1000)}s` : f.id === 'numCtx' ? `${cfg.numCtx ?? 8192}` : f.id === 'withPerf' ? (cfg.withPerf ? 'enabled' : 'disabled') : f.id === 'baseUrl' ? cfg.baseUrl : f.id === 'model' ? (cfg.model || '(auto)') : f.id === 'adapter' ? cfg.adapter : f.id === 'tier' ? cfg.tier : f.id === 'trials' ? `${cfg.trials}` : `${cfg.concurrency}`;
+            return (
+              <SelectableRow key={f.id} active={i === sfocus} marker=">">
+                <Box width={18}><Text bold={i === sfocus} color={i === sfocus ? 'cyan' : 'gray'}>{f.label}</Text></Box>
+                {i === sfocus && editing && (f.id === 'baseUrl' || f.id === 'apiKey' || f.id === 'model') ? (
+                  <TextInput defaultValue={textVal} onSubmit={(v) => { setCfg(c => ({ ...c, [f.id]: v })); setEditing(false); if (f.id !== 'model') void trigger(f.id === 'baseUrl' ? v : cfg.baseUrl, f.id === 'apiKey' ? v : cfg.apiKey); }} onCancel={() => setEditing(false)} />
+                ) : (
+                  <Text bold={i === sfocus}>{displayVal}</Text>
+                )}
+              </SelectableRow>
+            );
+          })}
         </Panel>
       </Box>
       <Box width="48%" flexDirection="column">
@@ -273,18 +335,40 @@ function SettingsView({ cfg, setCfg, sfocus, setSfocus, editing, setEditing, pre
   );
 }
 
-function RunView({ cfg, current, running, completed, total }: any) {
+interface RunViewProps {
+  cfg: BenchmarkConfig;
+  current?: RunResult;
+  running: boolean;
+  completed: number;
+  total: number;
+}
+function RunView({ cfg, current, running, completed, total }: RunViewProps) {
   return <Panel title="Live Run Detail"><KeyValue label="Model" value={cfg.model || '(endpoint default)'} labelWidth={14} /><KeyValue label="Status" value={running ? <Spinner label="Running scenario..." /> : <Badge variant="info">READY</Badge>} labelWidth={14} /><KeyValue label="Progress" value={`${completed} / ${total}`} labelWidth={14} /><TracePanel trial={current?.trials.at(-1)} /></Panel>;
 }
-function ScenariosView({ scenarios, results }: any) {
-  const tableData = scenarios.slice(0, 15).map((s: Scenario) => ({ id: s.id, tier: s.tier, cat: s.category, status: results.find((r: any) => r.scenarioId === s.id)?.trials.at(-1)?.success ? 'PASS' : 'PENDING' }));
+
+interface ScenariosViewProps {
+  scenarios: Scenario[];
+  results: RunResult[];
+}
+function ScenariosView({ scenarios, results }: ScenariosViewProps) {
+  const tableData = scenarios.slice(0, 15).map((s: Scenario) => ({ id: s.id, tier: s.tier, cat: s.category, status: results.find((r: RunResult) => r.scenarioId === s.id)?.trials.at(-1)?.success ? 'PASS' : 'PENDING' }));
   return <Panel title={`Scenarios (${scenarios.length})`}><Table data={tableData} columns={[{ key: 'id', header: 'ID', width: 22 }, { key: 'tier', header: 'Tier', width: 12 }, { key: 'cat', header: 'Category', width: 24 }, { key: 'status', header: 'Status', width: 12 }]} /></Panel>;
 }
-function ResultsView({ results, summary }: any) {
-  return <Panel title="Benchmark Summary">{summary && <Alert variant="success" title="Benchmark Complete"><Text>{formatSummary(summary)}</Text></Alert>}<KeyValue label="Completed" value={`${results.length} scenarios`} labelWidth={14} /><Table data={results.slice(-8).reverse().map((r: any) => ({ id: r.scenarioId, tier: r.tier, calls: `${r.trials.at(-1)?.toolCalls.length ?? 0}`, score: r.trials.at(-1)?.success ? 'PASS' : 'FAIL' }))} columns={[{ key: 'id', header: 'Scenario ID', width: 24 }, { key: 'tier', header: 'Tier', width: 12 }, { key: 'calls', header: 'Calls', width: 10 }, { key: 'score', header: 'Score', width: 10 }]} /></Panel>;
+
+interface ResultsViewProps {
+  results: RunResult[];
+  summary?: BenchmarkSummary;
 }
-function RankingsView({ cfg, results }: any) {
-  const ranking = buildRanking(cfg.model || 'unknown', cfg.adapter, cfg.cluster, results);
+function ResultsView({ results, summary }: ResultsViewProps) {
+  return <Panel title="Benchmark Summary">{summary && <Alert variant="success" title="Benchmark Complete"><Text>{formatSummary(summary)}</Text></Alert>}<KeyValue label="Completed" value={`${results.length} scenarios`} labelWidth={14} /><Table data={results.slice(-8).reverse().map((r: RunResult) => ({ id: r.scenarioId, tier: r.tier, calls: `${r.trials.at(-1)?.toolCalls.length ?? 0}`, score: r.trials.at(-1)?.success ? 'PASS' : 'FAIL' }))} columns={[{ key: 'id', header: 'Scenario ID', width: 24 }, { key: 'tier', header: 'Tier', width: 12 }, { key: 'calls', header: 'Calls', width: 10 }, { key: 'score', header: 'Score', width: 10 }]} /></Panel>;
+}
+
+interface RankingsViewProps {
+  cfg: BenchmarkConfig;
+  results: RunResult[];
+}
+function RankingsView({ cfg, results }: RankingsViewProps) {
+  const ranking = buildRanking(cfg.model || 'unknown', cfg.adapter, cfg.cluster ?? 'single', results);
   const data = Object.entries(ranking.dimensions).map(([k, v]) => ({ dimension: k, score: `${(Number(v) * 100).toFixed(0)}%` }));
   return <Panel title="Capability Rankings"><Alert variant="info" title={`Overall Score: ${(ranking.score * 100).toFixed(1)}%`}><ProgressBar value={Math.round(ranking.score * 100)} width={30} color="green" /></Alert><Table data={data} columns={[{ key: 'dimension', header: 'Dimension', width: 28 }, { key: 'score', header: 'Score', width: 14 }]} /></Panel>;
 }
@@ -294,7 +378,7 @@ function CompareView({ count }: { count: number }) {
 function ProfilesView() {
   return <Panel title="Benchmark Profiles"><Table data={PROFILES.map(p => ({ id: p.id, desc: p.description }))} columns={[{ key: 'id', header: 'Profile ID', width: 22 }, { key: 'desc', header: 'Description', width: 60 }]} /></Panel>;
 }
-function HistoryView({ history }: { history: any[] }) {
+function HistoryView({ history }: { history: HistoryRun[] }) {
   const data = history.slice(-8).reverse().map(x => ({ date: x.startedAt?.slice(0, 19) ?? '—', model: x.model || '(unknown)', rate: `${(Number(x.summary?.successRate ?? 0) * 100).toFixed(1)}%` }));
   return <Panel title="Run History (Local)">{data.length ? <Table data={data} columns={[{ key: 'date', header: 'Date', width: 24 }, { key: 'model', header: 'Model', width: 24 }, { key: 'rate', header: 'Success Rate', width: 16 }]} /> : <StatusMessage variant="warning">No history recorded yet.</StatusMessage>}</Panel>;
 }

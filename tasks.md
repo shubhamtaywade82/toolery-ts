@@ -17,14 +17,14 @@
 ## P1 — High Priority (before announcing / blogging)
 
 - [x] **P1-1. Fix `.gitignore` typo + untrack local state** *(DONE 2026-09-26 — PR #2)* — pattern `.toolery/** */` contains a space and never matches; `.toolery/history.json` (real run data) is committed. Fix to `.toolery/`, `git rm -r --cached .toolery`. *(5 min.)*
-- [ ] **P1-2. README quickstart for npm users** — current README assumes a repo clone. Add an "Install & run in 60s" section: `npx toolery-ts@latest run --model <model> --adapter ollama ...`, including that upstream scenarios ship inside the package post-P0-5.
+- [x] **P1-2. README quickstart for npm users** *(DONE 2026-09-26)* — added Installation section (npm global, npx direct execution, source build/link), configuration & environment variables table, preset catalog, and interactive TUI usage/keybindings guide.
 - [x] **P1-3. Friendly error for unsynced upstream** *(DONE 2026-09-26 — PR #5)* — `--source upstream` without vendor manifest throws raw `ENOENT: .../manifest.json` (because `vendor/toolery-upstream/` exists with only NOTICE.md, the `existsSync` guard passes). Fix `loadUpstreamScenariosSync` to check for `manifest.json` explicitly and throw the intended `Run npm run sync:upstream.` message.
 - [ ] **P1-4. Expand test coverage** (current: 10 tests / 37 LOC). Minimum additions, all offline:
   - `parseConfig` validation table (bad tier/trials/concurrency/timeout, env fallbacks)
   - `BenchmarkService` resume guards (version/model/tier/source mismatch throws) + skip-completed behavior
   - `OllamaAdapter` + `OpenAICompatibleAdapter` parsing against a local `http` mock server (tool_calls with string vs object args)
   - `mcnemar` known-answer tests (incl. discordant=0 → null p) and `exportCsv` output shape
-- [ ] **P1-5. Lint debt** — eliminate new-`any` warnings at HTTP boundaries in `adapters.ts` / `scenario-loader.ts` (type the payload shapes); target 0 warnings.
+- [x] **P1-5. Lint debt** *(DONE 2026-09-26)* — eliminate `any` warnings across all modules (`adapters.ts`, `scenario-loader.ts`, `probe.ts`, `app.tsx`, `cli.tsx`, `contract-scoring.ts`); achieved 0 errors and 0 warnings.
 - [x] **P1-6. Publish v0.4.2** — after P0-1…P0-5 + P1-1: changelog section in README, tag `v0.4.2`, `npm publish` (public access already configured). *(Version bumped, README changelog added, tag `v0.4.2` pushed and GitHub Release created 2026-09-26 — only `npm publish` remains, maintainer-run.)*
 
 ## P2 — Quality & Parity (post-announce backlog)

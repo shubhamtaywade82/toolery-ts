@@ -2,6 +2,41 @@
 
 Deterministic tool-calling benchmark for LLM endpoints, implemented in TypeScript with Ink.
 
+## Installation
+
+### From npm
+
+Install globally to get the `toolery` command on your system:
+
+```bash
+npm install -g toolery-ts
+```
+
+Or run directly without installing:
+
+```bash
+npx toolery-ts run --model qwen2.5:4b --adapter ollama
+```
+
+### From source (local clone)
+
+```bash
+git clone https://github.com/shubhamtaywade82/toolery-ts.git
+cd toolery-ts
+npm install
+npm run build
+npm link             # Symlinks 'toolery' into your global PATH
+```
+
+Alternatively, run directly from the repository without `npm link`:
+
+```bash
+npm run dev -- tui          # Interactive TUI via tsx
+npm start -- run --headless # Build and run headless CLI
+# or
+node dist/cli.js tui
+```
+
 ## Upstream compatibility
 
 Toolery-TS targets compatibility with `karolpalys/toolery`. The pinned upstream source defines 143 hand-written scenarios: 40 easy, 45 medium, 34 hard and 24 very-hard, plus a richer scoring contract and multi-axis evaluation model.
@@ -81,7 +116,80 @@ toolery export --input results.json --output results.csv
 
 `toolery tui` always launches the interactive dashboard and requires a terminal.
 
->>>>>>> bb2c8d4 (feat(run): add headless non-TTY execution mode)
+## Configuration & Environment Variables
+
+Toolery can be configured via CLI flags or matching environment variables. CLI flags take precedence over environment variables:
+
+| CLI Option | Environment Variable | Default | Description |
+|---|---|---|---|
+| `--model <name>` | `TOOLERY_MODEL` | `""` (or detected via probe) | Target model name (e.g. `qwen2.5:7b`, `llama3.1:8b`, `gpt-4o`) |
+| `--adapter <kind>` | `TOOLERY_ADAPTER` | `ollama` | Provider adapter: `ollama`, `openai-compatible`, `raw`, `cloud`, `hermes`, `mock` |
+| `--base-url <url>` | `TOOLERY_BASE_URL` | `http://localhost:11434` (`/v1` for OpenAI) | Endpoint API base URL |
+| `--api-key <key>` | `TOOLERY_API_KEY` | `""` | API authentication key for cloud or gated endpoints |
+| `--source <source>` | `TOOLERY_SOURCE` | `synthetic` | Scenario pack: `synthetic` or `upstream` |
+| `--tier <tier>` | `TOOLERY_TIER` | `all` | Scenario tier: `all`, `easy`, `medium`, `hard`, `very-hard` |
+| `--trials <n>` | `TOOLERY_TRIALS` | `3` | Number of trial iterations per scenario (1–100) |
+| `--concurrency <n>` | `TOOLERY_CONCURRENCY` | `1` | Concurrent scenario worker threads (1–32) |
+| `--timeout <ms>` | `TOOLERY_TIMEOUT_MS` | `180000` | Request timeout in milliseconds (minimum 100ms) |
+| `--num-ctx <n>` | `TOOLERY_NUM_CTX` | `8192` | Ollama context window size (minimum 512) |
+| `--keep-alive <dur>` | `TOOLERY_KEEP_ALIVE` | `"30m"` | Ollama model keep-alive duration in memory |
+| `--profile <id>` | `TOOLERY_PROFILE` | `default` | Benchmark scoring weight profile |
+| `--cluster <top>` | `TOOLERY_CLUSTER` | `single` | Cluster topology metadata (`single`, `dual`, `triple`, `quad`, `octa`) |
+| `--output <path>` | `TOOLERY_OUTPUT` | `""` | Path to save resumable JSON execution snapshot |
+| `--resume <path>` | `TOOLERY_RESUME` | `""` | Path to existing JSON snapshot to resume incomplete runs |
+| `--headless` | — | `false` | Run headless without rendering TUI (auto when non-TTY) |
+
+### Built-in Provider Presets
+
+The interactive TUI includes pre-configured presets for popular local and cloud inference servers:
+- **Ollama Native (Local)**: `http://localhost:11434` (`ollama` adapter)
+- **Ollama OpenAI (Local)**: `http://localhost:11434/v1` (`openai-compatible` adapter)
+- **LMStudio (Local)**: `http://localhost:1234/v1` (`openai-compatible` adapter)
+- **vLLM (Local)**: `http://localhost:8000/v1` (`openai-compatible` adapter)
+- **OpenRouter (Cloud)**: `https://openrouter.ai/api/v1` (requires `--api-key`)
+- **OpenAI Official**: `https://api.openai.com/v1` (requires `--api-key`)
+- **Groq Cloud**: `https://api.groq.com/openai/v1` (requires `--api-key`)
+- **Mock Adapter**: In-memory dummy provider for offline verification
+
+## Interactive TUI
+
+Launch the full-screen terminal dashboard:
+
+```bash
+toolery tui --model qwen2.5:4b --base-url http://localhost:11434
+# Or from a local clone:
+npm start -- tui --model qwen2.5:4b
+```
+
+*(Note: In an interactive terminal, `toolery run` without `--headless` also opens the TUI).*
+
+### Dashboard Tabs
+
+1. **Home**: Overview of endpoint health, current configuration, benchmark progress bar, live tool-call trace, capability scores, and recent trial outcomes.
+2. **Scenarios**: Filterable catalog of scenarios with tier and category tags.
+3. **Run**: Real-time per-scenario execution monitor showing current progress and live trial traces.
+4. **Results**: Summary of completed scenarios, pass/fail status, and tool call counts.
+5. **Rankings**: Capability scores across 18 dimensions (coding, debugging, safety, parameter precision, etc.).
+6. **Compare**: McNemar paired statistical testing between runs.
+7. **Profiles**: Catalog of weighting profiles for specific domain use cases.
+8. **History**: Local benchmark history persisted across sessions in `.toolery/history.json`.
+9. **Settings**: Live control panel allowing real-time adjustment of presets, URLs, keys, tiers, context sizes, and model switching without restarting the app.
+
+### Keybindings & Navigation
+
+| Key | Context | Action |
+|---|---|---|
+| <kbd>Tab</kbd> / <kbd>→</kbd> / <kbd>←</kbd> | Global | Switch between dashboard tabs |
+| <kbd>r</kbd> | Global | Start or execute benchmark run |
+| <kbd>s</kbd> | Global | Jump directly to Settings tab |
+| <kbd>p</kbd> | Global | Trigger endpoint health probe & model detection |
+| <kbd>m</kbd> | Global | Cycle through models discovered by the probe |
+| <kbd>q</kbd> | Global | Quit Toolery |
+| <kbd>↑</kbd> / <kbd>↓</kbd> | Settings | Navigate configuration fields |
+| <kbd>Enter</kbd> | Settings | Edit text field (`Base URL`, `API Key`, `Model`) |
+| <kbd>→</kbd> / <kbd>←</kbd> | Settings | Cycle provider presets, adapters, tiers, or adjust numbers |
+| <kbd>Esc</kbd> | Settings | Cancel field editing or return to Home tab |
+
 ## Benchmark integrity
 
 Scenario definitions, tool schemas, mocked results, checks and benchmark version are versioned. Profiles affect reporting only. The benchmark runner never executes arbitrary shell/file operations generated by a model; terminal scenarios are evaluated through observable tool-call contracts.

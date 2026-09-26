@@ -1,14 +1,19 @@
-import type {AdapterRequest,AdapterResponse,AdapterKind,LlmAdapter,ToolCall} from '../types.js';
-import {OllamaClient} from '@nemesis-oss/ollama-sdk';
+import type {AdapterRequest,AdapterResponse,AdapterKind,ChatMessage,LlmAdapter,ToolCall} from '../types.js';
+import {OllamaClient, type ChatRequestOptions} from '@nemesis-oss/ollama-sdk';
 export interface AdapterOptions{baseUrl:string;apiKey?:string;timeoutMs:number;numCtx?:number;keepAlive?:string;}
+interface OpenAIFunctionCallPayload { name?: string; arguments?: string | Record<string, unknown>; }
+interface OpenAIToolCallPayload { id?: string; type?: string; function?: OpenAIFunctionCallPayload; }
+interface OpenAIMessagePayload { role?: string; content?: string | null; tool_calls?: OpenAIToolCallPayload[]; }
+interface OpenAIChoicePayload { finish_reason?: string; message?: OpenAIMessagePayload; }
+interface OpenAIChatPayload { choices?: OpenAIChoicePayload[]; usage?: { prompt_tokens?: number; completion_tokens?: number }; error?: { message?: string }; }
 function safeJsonObject(value:unknown):Record<string,unknown>{if(value&&typeof value==='object'&&!Array.isArray(value))return value as Record<string,unknown>;if(typeof value!=='string')return{};try{const parsed:unknown=JSON.parse(value);return parsed&&typeof parsed==='object'&&!Array.isArray(parsed)?parsed as Record<string,unknown>:{};}catch{return{};}}
-function formatOpenAIMessages(messages: any[]) {
+function formatOpenAIMessages(messages: ChatMessage[]) {
   return messages.map(m => {
     if (m.role === 'tool') return { role: 'tool', tool_call_id: m.toolCallId || '', name: m.name, content: m.content ?? '' };
     if (m.role === 'assistant' && m.toolCalls?.length) {
       return {
         role: 'assistant', content: m.content ?? '',
-        tool_calls: m.toolCalls.map((c: any) => ({ id: c.id || `call_${c.name}`, type: 'function', function: { name: c.name, arguments: typeof c.arguments === 'string' ? c.arguments : JSON.stringify(c.arguments || {}) } }))
+        tool_calls: m.toolCalls.map((c: ToolCall) => ({ id: c.id || `call_${c.name}`, type: 'function', function: { name: c.name, arguments: typeof c.arguments === 'string' ? c.arguments : JSON.stringify(c.arguments || {}) } }))
       };
     }
     return { role: m.role, content: m.content ?? '' };
@@ -31,10 +36,10 @@ export class OpenAICompatibleAdapter implements LlmAdapter{
           temperature:request.temperature??0
         })
       });
-      const payload=await response.json() as any;
+      const payload=(await response.json()) as OpenAIChatPayload;
       if(!response.ok)throw new Error(`LLM endpoint returned ${response.status}: ${payload?.error?.message??response.statusText}`);
       const message=payload?.choices?.[0]?.message??{};
-      const toolCalls:ToolCall[]=(message.tool_calls??[]).map((call:any)=>({id:call.id,name:call.function?.name??'',arguments:safeJsonObject(call.function?.arguments)})).filter((call:ToolCall)=>call.name);
+      const toolCalls:ToolCall[]=(message.tool_calls??[]).map((call:OpenAIToolCallPayload)=>({id:call.id,name:call.function?.name??'',arguments:safeJsonObject(call.function?.arguments)})).filter((call:ToolCall)=>call.name);
       return{text:typeof message.content==='string'?message.content:'',toolCalls,durationMs:performance.now()-started,inputTokens:payload?.usage?.prompt_tokens,outputTokens:payload?.usage?.completion_tokens,finishReason:payload?.choices?.[0]?.finish_reason,raw:payload};
     }finally{clearTimeout(timeout);}
   }
@@ -63,10 +68,10 @@ export class OllamaAdapter implements LlmAdapter{
       if(m.role==='assistant'&&m.toolCalls?.length)return{role:'assistant' as const,content:m.content??'',tool_calls:m.toolCalls.map(c=>({id:c.id||`call_${c.name}`,function:{name:c.name,arguments:safeJsonObject(c.arguments)}}))};
       return{role:m.role as 'system'|'user'|'assistant',content:m.content??''};
     });
-    const tools=request.tools.map(t=>({type:'function' as const,function:{name:t.name,description:t.description,parameters:t.parameters as any}}));
+    const tools=request.tools.map(t=>({type:'function' as const,function:{name:t.name,description:t.description,parameters:t.parameters as unknown as Record<string,unknown>}}));
     // num_ctx + seed ensure small models receive the full untruncated tool catalog and
     // produce deterministic output (temperature is already 0 from the runner).
-    const res=await this.client.chat({model:request.model,messages,tools:tools.length?tools:undefined,options:{temperature:request.temperature??0,num_ctx:this.numCtx,seed:0},keep_alive:this.keepAlive});
+    const res=await this.client.chat({model:request.model,messages,tools:tools.length?(tools as unknown as NonNullable<ChatRequestOptions['tools']>):undefined,options:{temperature:request.temperature??0,num_ctx:this.numCtx,seed:0},keep_alive:this.keepAlive});
     const toolCalls:ToolCall[]=(res.message.tool_calls??[]).map(c=>({id:c.id,name:c.function?.name??'',arguments:safeJsonObject(c.function?.arguments)})).filter(c=>c.name);
     return{text:res.message.content||'',toolCalls,durationMs:res.total_duration?res.total_duration/1e6:performance.now()-started,inputTokens:res.prompt_eval_count,outputTokens:res.eval_count,finishReason:res.done_reason||(toolCalls.length?'tool_calls':'stop'),raw:res};
   }
