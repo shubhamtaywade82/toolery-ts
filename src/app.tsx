@@ -94,7 +94,7 @@ function sanitizeCfg(c: BenchmarkConfig): BenchmarkConfig {
   const baseUrl = c?.baseUrl ?? (adapter === 'ollama' ? 'http://localhost:11434' : 'http://localhost:11434/v1');
   return {
     ...c, benchmarkVersion: c?.benchmarkVersion ?? '1.0.0', endpointPath: c?.endpointPath ?? '/chat/completions',
-    source: c?.source ?? 'synthetic', withPerf: c?.withPerf ?? false, trials: c?.trials ?? 3,
+    source: c?.source ?? 'upstream', withPerf: c?.withPerf ?? false, trials: c?.trials ?? 3,
     concurrency: c?.concurrency ?? 1, timeoutMs: c?.timeoutMs ?? 180_000, numCtx: c?.numCtx ?? 8192,
     keepAlive: c?.keepAlive, baseUrl, adapter
   };

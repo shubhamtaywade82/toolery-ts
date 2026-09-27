@@ -73,7 +73,9 @@ export class OllamaAdapter implements LlmAdapter{
     // produce deterministic output (temperature is already 0 from the runner).
     const res=await this.client.chat({model:request.model,messages,tools:tools.length?(tools as unknown as NonNullable<ChatRequestOptions['tools']>):undefined,options:{temperature:request.temperature??0,num_ctx:this.numCtx,seed:0},keep_alive:this.keepAlive});
     const toolCalls:ToolCall[]=(res.message.tool_calls??[]).map(c=>({id:c.id,name:c.function?.name??'',arguments:safeJsonObject(c.function?.arguments)})).filter(c=>c.name);
-    return{text:res.message.content||'',toolCalls,durationMs:res.total_duration?res.total_duration/1e6:performance.now()-started,inputTokens:res.prompt_eval_count,outputTokens:res.eval_count,finishReason:res.done_reason||(toolCalls.length?'tool_calls':'stop'),raw:res};
+    const thinkingText=(res.message as {thinking?:string}).thinking??'';
+    const text=res.message.content||(!toolCalls.length?thinkingText:'');
+    return{text,toolCalls,durationMs:res.total_duration?res.total_duration/1e6:performance.now()-started,inputTokens:res.prompt_eval_count,outputTokens:res.eval_count,finishReason:res.done_reason||(toolCalls.length?'tool_calls':'stop'),raw:res};
   }
 }
 export class HermesAdapter implements LlmAdapter{readonly kind:AdapterKind='hermes';async complete():Promise<AdapterResponse>{throw new Error('Hermes adapter requires the optional Hermes/MCP bridge. Use adapter=hermes only after configuring HERMES_HOME and the bridge runtime.');}}
