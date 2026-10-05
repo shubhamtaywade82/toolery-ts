@@ -16,6 +16,7 @@
     "sourceMap": true,
     "resolveJsonModule": true,
     "incremental": true,
+    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
     "types": ["node", "react"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],

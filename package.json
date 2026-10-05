@@ -1,6 +1,6 @@
 {
   "name": "toolery-ts",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Deterministic tool-calling benchmark for LLM endpoints",
   "type": "module",
   "main": "dist/index.js",
@@ -23,7 +23,7 @@
     "test": "node --test --import tsx tests/**/*.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src tests",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist *.tsbuildinfo",
     "pack:check": "npm run build && node scripts/pack-check.mjs",
     "prepublishOnly": "npm run typecheck && npm run lint && npm test && npm run sync:upstream && npm run build && node scripts/pack-check.mjs --require-upstream",
     "sync:upstream": "node scripts/sync-upstream-scenarios.mjs",
@@ -58,7 +58,7 @@
   },
   "dependencies": {
     "@kud/ink-ui": "^0.29.0",
-    "@nemesis-oss/ollama-sdk": "^1.3.0",
+    "@nemesis-oss/ollama-sdk": "^1.8.0",
     "ink": "^7.1.1",
     "meow": "^14.1.0",
     "react": "^19.3.0",

@@ -30,11 +30,11 @@
 ## P2 — Quality & Parity (post-announce backlog)
 
 - [ ] **P2-1. Readable-code refactor** — reformat the minified modules (`runner.ts`, `adapters.ts`, `config.ts`, `benchmark.ts`, `scenario-loader.ts`, `app.tsx`) into normal multi-line style. Behavior-preserving; do it module-by-module with tests green between each.
-- [ ] **P2-2. Ollama SDK decision** — evaluate swapping `@nemesis-oss/ollama-sdk` (author-owned, 3 versions) for the official `ollama` npm package. Record the decision in memory.md either way (D-4).
+- [x] **P2-2. Ollama SDK decision** — evaluate swapping `@nemesis-oss/ollama-sdk` (author-owned) for the official `ollama` npm package. Record the decision in memory.md either way (D-4). **Resolved 2026-10-05: keep the nemesis SDK, upgraded 1.3.0→1.8.0 (latest) with the `tool_name` wire fix — see D-12.**
 - [ ] **P2-3. `exports` map in package.json** — `"./cli"` vs `"."` split so programmatic consumers can't import the TUI accidentally.
-- [ ] **P2-4. McNemar overflow guard** — `2**discordant` overflows to `Infinity` for discordant > 1023 → p becomes NaN. Clamp or use log-space when `discordant > 500`.
+- [x] **P2-4. McNemar overflow guard** — `2**discordant` overflows to `Infinity` for discordant > 1023 → p becomes NaN. **Fixed 2026-10-05: chi-square approximation with continuity correction for discordant > 1000; exact binomial kept below (B-9).**
 - [ ] **P2-5. Upstream parity work** (see PARITY.md): golden probe guardrail, empirical re-tiering job, richer frozen-table scrolling polish.
-- [ ] **P2-6. `llama-benchy` perf integration** — currently unvalidated; either validate the CLI invocation behind `--with-perf` or hide the flag until it works.
+- [x] **P2-6. `llama-benchy` perf integration** — **Fixed 2026-10-05: `--with-perf` now actually invokes llama-benchy after the benchmark (headless + TUI); missing `uvx` is logged and skipped, never fatal (B-16).** Invocation validated structurally; real throughput numbers still need a live llama-benchy environment.
 - [ ] **P2-7. History viewer polish** — History tab sorting/filtering; bounded retention UI.
 
 ## Done (MVP baseline — do not re-implement)

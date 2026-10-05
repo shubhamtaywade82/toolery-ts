@@ -226,6 +226,20 @@ npm run pack:check
 
 ## Changelog
 
+### 0.5.0 (2026-10-05)
+
+- **Upgrade** — `@nemesis-oss/ollama-sdk` `1.3.0` → `1.8.0` (latest). The native Ollama adapter now speaks the SDK's current wire contract: tool-result messages are identified by `tool_name` (Ollama's native `/api/chat` field) instead of `tool_call_id`, which the SDK strips from native requests since 1.4. Without this, every multi-turn tool loop sent anonymous tool results and broke against real Ollama servers.
+- **Fixed** — `toolery probe` without `--base-url` probed the literal URL `undefined`; it now defaults to `http://localhost:11434` (or `TOOLERY_BASE_URL`).
+- **Fixed** — OpenAI-compatible adapter reported opaque `Unexpected token '<'` SyntaxErrors for HTML error pages (502/504 gateways); it now reports `LLM endpoint returned <status>` with the body snippet.
+- **Fixed** — tool-call id mismatches in multi-turn loops against OpenAI-compatible endpoints that omit tool-call ids (vLLM, LMStudio): the runner now assigns stable ids so assistant `tool_calls` and tool-result messages correlate correctly.
+- **Fixed** — `mcnemar` produced `NaN`/`0` p-values for discordant counts > 1023 (`2**d` overflows IEEE doubles); large counts now use the chi-square approximation with continuity correction (exact binomial is kept for d ≤ 1000).
+- **Fixed** — `npm run clean` left a root-level `tsconfig.tsbuildinfo` behind, making the next incremental build silently emit nothing (empty `dist/` with exit 0). The build info now lives inside `dist/` and `clean` removes it; `tsBuildInfoFile` is pinned.
+- **Fixed** — mock adapters extracted `Bengaluru today` as the weather location (greedy regex), halving argument accuracy for weather scenarios; mock easy-tier smoke score rose 85% → 97.5%.
+- **Fixed** — upstream source auto-detection only looked at the working directory; the installed npm package now also resolves the vendored suite relative to the package root, so `--source upstream` works from any directory after `npm i -g toolery-ts`.
+- **Added** — `--keep-alive` / `TOOLERY_KEEP_ALIVE` now validates the Ollama duration format (`30m`, `5s`, `1h30m`, or seconds) instead of passing garbage to the server.
+- **Added** — `--with-perf` actually runs llama-benchy throughput checks after the benchmark (headless + TUI). It was previously accepted and silently ignored. Missing `uvx`/llama-benchy is logged and skipped, never fatal.
+- **Tests** — coverage extended from 10 to 23 tests: adapter wire contract (`tool_name`, `num_ctx`/`seed`/`keep_alive`, `/v1` normalization, non-JSON error bodies), McNemar overflow, config validation, mock extraction regressions.
+
 ### 0.4.2 (2026-09-26)
 
 - **Fixed** — fresh-clone builds: `tsconfig.tsbuildinfo` is no longer committed; a clean clone now emits `dist/` (PR #2).

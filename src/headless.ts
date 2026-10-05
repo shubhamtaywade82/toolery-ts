@@ -2,6 +2,7 @@ import { appendHistory } from './history.js';
 import { BenchmarkService } from './benchmark.js';
 import { formatSummary } from './export.js';
 import { loadScenarios } from './scenarios.js';
+import { runLlamaBenchy } from './perf.js';
 import type { BenchmarkConfig, RunResult } from './types.js';
 
 /**
@@ -44,6 +45,20 @@ export async function runHeadless(config: BenchmarkConfig): Promise<void> {
   process.stdout.write(`\nCompleted ${results.length} scenarios in ${((Date.now() - started) / 1000).toFixed(1)}s\n`);
   process.stdout.write(`${formatSummary(summary)}\n`);
   if (config.output) process.stdout.write(`Snapshot written to ${config.output}\n`);
+
+  // Optional llama-benchy throughput pass (opt-in via --with-perf). Runs after the
+  // benchmark so a missing `uvx`/llama-benchy toolchain never invalidates the run.
+  if (config.withPerf && config.adapter !== 'mock' && config.model) {
+    process.stdout.write('\nRunning llama-benchy throughput checks...\n');
+    try {
+      const perf = await runLlamaBenchy(config.model, config.baseUrl);
+      for (const p of perf) {
+        process.stdout.write(`  depth ${p.contextDepth ?? '—'}: ${p.generationTokensPerSecond !== undefined ? `${p.generationTokensPerSecond.toFixed(1)} tok/s gen` : 'no throughput measured'} (${Math.round(p.durationMs)}ms)\n`);
+      }
+    } catch (error) {
+      process.stdout.write(`  Perf checks skipped: ${error instanceof Error ? error.message : String(error)}\n`);
+    }
+  }
 
   await appendHistory({
     runId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
