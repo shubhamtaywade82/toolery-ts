@@ -36,11 +36,20 @@ test('upstream pack resolves from a foreign CWD (installed-package layout)',asyn
 });
 
 test('TOOLERY_UPSTREAM_DIR overrides the pack location',()=>{
+  if(!upstreamPackSynced())return; // pack not synced in this checkout (CI); negative case covered separately
   const original=process.env.TOOLERY_UPSTREAM_DIR;
   try{
     process.env.TOOLERY_UPSTREAM_DIR=resolveUpstreamDir();
     const scenarios=loadUpstreamScenariosSync();
     assert.equal(scenarios.length,143);
+  }finally{
+    if(original===undefined)delete process.env.TOOLERY_UPSTREAM_DIR;else process.env.TOOLERY_UPSTREAM_DIR=original;
+  }
+});
+
+test('TOOLERY_UPSTREAM_DIR pointing at a missing pack errors clearly',()=>{
+  const original=process.env.TOOLERY_UPSTREAM_DIR;
+  try{
     process.env.TOOLERY_UPSTREAM_DIR='/nonexistent/toolery-upstream';
     assert.throws(()=>loadUpstreamScenariosSync(),/not synced/);
   }finally{
