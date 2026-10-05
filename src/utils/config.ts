@@ -9,23 +9,32 @@ const clusters:ClusterTopology[]=['single','dual','triple','quad','octa'];
 const sources:ScenarioSource[]=['synthetic','upstream'];
 
 /**
- * Auto-detect whether the synced upstream scenario pack is available.
+ * Resolve the directory holding the vendored upstream scenario pack.
  *
- * Two locations are probed, in order:
- *  1. `<cwd>/vendor/toolery-upstream/manifest.json` — repository checkouts and
- *     `npm link`-ed dev runs, matching the documented sync flow.
- *  2. `<package-root>/vendor/toolery-upstream/manifest.json` — the installed npm
- *     package, whose tarball ships the vendored suite. Resolved relative to this
- *     module (dist/utils/config.js or src/utils/config.ts — both two levels under
- *     the package root), so it works no matter which directory the CLI is invoked
- *     from.
+ * Preference order:
+ *  1. `TOOLERY_UPSTREAM_DIR` (explicit override, applied by callers),
+ *  2. `<cwd>/vendor/toolery-upstream` — repository checkouts and
+ *     `npm link`-ed dev runs, matching the documented sync flow,
+ *  3. `<package-root>/vendor/toolery-upstream` — the installed npm
+ *     package, whose tarball ships the vendored suite. Resolved relative
+ *     to this module (dist/utils/config.js or src/utils/config.ts — both
+ *     two levels under the package root), so it works no matter which
+ *     directory the CLI is invoked from.
+ *
+ * Returns the first candidate that contains a manifest.json; when none do,
+ * the CWD-relative path is returned so downstream errors point at the
+ * documented sync flow rather than deep inside node_modules.
  */
-export function upstreamPackSynced(): boolean {
+export function resolveUpstreamDir(): string {
   const candidates=[
-    path.resolve('vendor/toolery-upstream/manifest.json'),
-    fileURLToPath(new URL('../../vendor/toolery-upstream/manifest.json', import.meta.url)),
+    path.resolve('vendor/toolery-upstream'),
+    fileURLToPath(new URL('../../vendor/toolery-upstream', import.meta.url)),
   ];
-  return candidates.some(candidate=>existsSync(candidate));
+  return candidates.find(candidate=>existsSync(path.join(candidate,'manifest.json'))) ?? candidates[0];
+}
+
+export function upstreamPackSynced(): boolean {
+  return existsSync(path.join(resolveUpstreamDir(),'manifest.json'));
 }
 
 export function detectScenarioSource(): ScenarioSource {

@@ -235,10 +235,10 @@ npm run pack:check
 - **Fixed** — `mcnemar` produced `NaN`/`0` p-values for discordant counts > 1023 (`2**d` overflows IEEE doubles); large counts now use the chi-square approximation with continuity correction (exact binomial is kept for d ≤ 1000).
 - **Fixed** — `npm run clean` left a root-level `tsconfig.tsbuildinfo` behind, making the next incremental build silently emit nothing (empty `dist/` with exit 0). The build info now lives inside `dist/` and `clean` removes it; `tsBuildInfoFile` is pinned.
 - **Fixed** — mock adapters extracted `Bengaluru today` as the weather location (greedy regex), halving argument accuracy for weather scenarios; mock easy-tier smoke score rose 85% → 97.5%.
-- **Fixed** — upstream source auto-detection only looked at the working directory; the installed npm package now also resolves the vendored suite relative to the package root, so `--source upstream` works from any directory after `npm i -g toolery-ts`.
+- **Fixed** — upstream scenario resolution only looked at the working directory, so the installed npm package crashed with "pack not synced" when invoked from any other directory. Source auto-detection and both scenario loaders now share one resolver that probes `TOOLERY_UPSTREAM_DIR` → `<cwd>/vendor` → package-root `vendor`; `--source upstream` works from anywhere after `npm i -g toolery-ts`.
 - **Added** — `--keep-alive` / `TOOLERY_KEEP_ALIVE` now validates the Ollama duration format (`30m`, `5s`, `1h30m`, or seconds) instead of passing garbage to the server.
 - **Added** — `--with-perf` actually runs llama-benchy throughput checks after the benchmark (headless + TUI). It was previously accepted and silently ignored. Missing `uvx`/llama-benchy is logged and skipped, never fatal.
-- **Tests** — coverage extended from 10 to 23 tests: adapter wire contract (`tool_name`, `num_ctx`/`seed`/`keep_alive`, `/v1` normalization, non-JSON error bodies), McNemar overflow, config validation, mock extraction regressions.
+- **Tests** — coverage extended from 10 to 25 tests: adapter wire contract (`tool_name`, `num_ctx`/`seed`/`keep_alive`, `/v1` normalization, non-JSON error bodies), McNemar overflow, config validation, mock extraction regressions, foreign-CWD upstream-pack resolution, `TOOLERY_UPSTREAM_DIR` override.
 
 ### 0.4.2 (2026-09-26)
 
