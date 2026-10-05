@@ -10,9 +10,9 @@
 | Runtime | Node.js >= 20 | Uses native `fetch`, `node:test`, `performance.now()` |
 | CLI | meow v14 | Subcommands dispatched in `src/cli.tsx` |
 | TUI | Ink 7 + React 19 + `@kud/ink-ui` | Terminal dashboard; requires TTY |
-| Ollama transport | `@nemesis-oss/ollama-sdk` v1.3 | Author's own SDK (maintenance risk — see memory.md) |
+| Ollama transport | `@nemesis-oss/ollama-sdk` v1.8 | Author's own SDK (maintenance risk — see memory.md); upgraded 1.3→1.8 with the `tool_name` wire fix (D-12) |
 | YAML | `yaml` v2 | Upstream scenario parsing |
-| Tests | `node:test` + `tsx` loader | 10 tests, no framework deps |
+| Tests | `node:test` + `tsx` loader | 26 tests, no framework deps |
 | Build | `tsc` → `dist/` | `declaration`, `declarationMap`, `sourceMap` |
 
 ## 2. Folder Structure

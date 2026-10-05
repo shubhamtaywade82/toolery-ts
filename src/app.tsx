@@ -12,6 +12,8 @@ import { probeEndpoint } from './probe.js';
 import { formatSummary } from './export.js';
 import { buildRanking } from './rankings.js';
 import { appendHistory, loadHistory, type HistoryRun } from './history.js';
+import { runLlamaBenchy } from './perf.js';
+import { detectScenarioSource } from './utils/config.js';
 import type { BenchmarkConfig, BenchmarkSummary, HealthProbe, RunResult, Scenario, TrialResult, CapabilityName, Tier, AdapterKind, ExpectedToolCall } from './types.js';
 
 type Tab = 'Home' | 'Scenarios' | 'Run' | 'Results' | 'Rankings' | 'Compare' | 'Profiles' | 'History' | 'Settings';
@@ -94,7 +96,7 @@ function sanitizeCfg(c: BenchmarkConfig): BenchmarkConfig {
   const baseUrl = c?.baseUrl ?? (adapter === 'ollama' ? 'http://localhost:11434' : 'http://localhost:11434/v1');
   return {
     ...c, benchmarkVersion: c?.benchmarkVersion ?? '1.0.0', endpointPath: c?.endpointPath ?? '/chat/completions',
-    source: c?.source ?? 'upstream', withPerf: c?.withPerf ?? false, trials: c?.trials ?? 3,
+    source: c?.source ?? detectScenarioSource(), withPerf: c?.withPerf ?? false, trials: c?.trials ?? 3,
     concurrency: c?.concurrency ?? 1, timeoutMs: c?.timeoutMs ?? 180_000, numCtx: c?.numCtx ?? 8192,
     keepAlive: c?.keepAlive, baseUrl, adapter
   };
@@ -141,6 +143,17 @@ function useRunner(cfg: BenchmarkConfig, scenarios: Scenario[], onLog?: (msg: st
         });
         setResults(result.results); setSummary(result.summary);
         onLog?.(`[${new Date().toLocaleTimeString()}] Done: ${result.summary.passedTrials}/${result.summary.trials} passed (${(result.summary.successRate * 100).toFixed(0)}%)`);
+        // Optional llama-benchy throughput pass (opt-in via Settings "Perf Checks").
+        // Failures (missing uvx/llama-benchy) are logged, never fatal to the benchmark.
+        if (mCfg.withPerf && mCfg.adapter !== 'mock' && targetModel !== 'mock') {
+          onLog?.(`[${new Date().toLocaleTimeString()}] Running llama-benchy throughput checks for ${targetModel}...`);
+          try {
+            const perf = await runLlamaBenchy(targetModel, mCfg.baseUrl);
+            for (const p of perf) onLog?.(`[perf] ${targetModel} depth=${p.contextDepth ?? '—'} gen=${p.generationTokensPerSecond !== undefined ? `${p.generationTokensPerSecond.toFixed(1)} tok/s` : 'n/a'}`);
+          } catch (err) {
+            onLog?.(`[perf] skipped: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
         await appendHistory({
           runId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, startedAt: new Date().toISOString(),
           model: mCfg.model, adapter: mCfg.adapter, source: mCfg.source, tier: mCfg.tier, profile: mCfg.profile,

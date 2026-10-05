@@ -34,7 +34,7 @@ export class ScriptedMockAdapter implements LlmAdapter {
       return {text: finalText(user), toolCalls: [], durationMs: 1, finishReason: 'stop'};
     }
 
-    const weather = user.match(/weather in ([A-Za-z ]+)/i);
+    const weather = user.match(/weather in ([A-Za-z][A-Za-z ]*?)(?=\s+(?:today|tomorrow|tonight|right now|now)\b|[?.!]|$)/i);
     if (weather) add('get_weather', {location: weather[1].trim(), date: 'today'});
 
     const crypto = user.match(/price of ([A-Z0-9]+)/);
