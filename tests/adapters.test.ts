@@ -80,7 +80,7 @@ test('ollama adapter sends tool_name on tool-result messages (sdk >= 1.8 wire co
 
     // First request: options + keep_alive on the wire.
     const firstBody = requests[0]!.body;
-    assert.deepEqual(firstBody.options, { temperature: 0, num_ctx: 4096, seed: 0 });
+    assert.deepEqual(firstBody.options, { temperature: 0, num_ctx: 4096, seed: 0, num_predict: 1024 });
     assert.equal(firstBody.keep_alive, '15m');
 
     // Second request: the tool message must identify itself via tool_name

@@ -99,11 +99,14 @@ export class OllamaAdapter implements LlmAdapter{
     }));
     // num_ctx + seed ensure small models receive the full untruncated tool catalog and
     // produce deterministic output (temperature is already 0 from the runner).
+    // num_predict caps one response: uncapped, a thinking model can run away and
+    // fill the whole 8192 ctx for ~3 minutes, hitting the 180s client timeout and
+    // stalling the whole trial (observed with openbmb/minicpm5-2b).
     const res=await this.client.chat({
       model:request.model,
       messages,
       tools:tools.length?tools:undefined,
-      options:{temperature:request.temperature??0,num_ctx:this.numCtx,seed:0},
+      options:{temperature:request.temperature??0,num_ctx:this.numCtx,seed:0,num_predict:1024},
       keep_alive:this.keepAlive,
     });
     const toolCalls:ToolCall[]=(res.message.tool_calls??[]).map(c=>({id:c.id,name:c.function?.name??'',arguments:safeJsonObject(c.function?.arguments)})).filter(c=>c.name);

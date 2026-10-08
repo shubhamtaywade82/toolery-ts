@@ -608,7 +608,11 @@ export function App({ config }: { config: BenchmarkConfig }) {
             : (narrowHeader ? 'OFFLINE · press p' : 'OFFLINE — press p to probe'),
         tone: (probing ? 'busy' : 'news') as 'news' | 'busy' | 'quiet'
       };
-  const counter = `${runner.results.length} of ${scenarios.length} · ${runner.summary ? Math.round(runner.summary.successRate * 100) : 0}% pass`;
+  // Live pass rate from completed trials: `summary` only exists after the run
+  // finishes, so gating the counter on it showed 0% for the entire run.
+  const doneTrials = runner.results.flatMap(r => r.trials);
+  const passRate = doneTrials.length ? Math.round((doneTrials.filter(t => t.success).length / doneTrials.length) * 100) : 0;
+  const counter = `${runner.results.length} of ${scenarios.length} · ${passRate}% pass`;
 
   return (
     <Page width={termCols} height={Math.max(rows || 24, 24)} title="Toolery-TS" icon="🔧"
