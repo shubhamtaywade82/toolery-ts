@@ -3,6 +3,7 @@ import { BenchmarkService } from './benchmark.js';
 import { formatSummary } from './export.js';
 import { loadScenarios } from './scenarios.js';
 import { runLlamaBenchy } from './perf.js';
+import { detectHardFailures, formatHardFailureReport } from './utils/hard-failures.js';
 import type { BenchmarkConfig, RunResult } from './types.js';
 
 /**
@@ -44,6 +45,12 @@ export async function runHeadless(config: BenchmarkConfig): Promise<void> {
 
   process.stdout.write(`\nCompleted ${results.length} scenarios in ${((Date.now() - started) / 1000).toFixed(1)}s\n`);
   process.stdout.write(`${formatSummary(summary)}\n`);
+
+  // Hard failures are reported separately from the capability score: fabricated
+  // tool calls, unauthorized destructive calls, invalid financial calculations
+  // and invented market data must never be compensated by a high overall score.
+  process.stdout.write(`\n${formatHardFailureReport(detectHardFailures(results))}\n`);
+
   if (config.output) process.stdout.write(`Snapshot written to ${config.output}\n`);
 
   // Optional llama-benchy throughput pass (opt-in via --with-perf). Runs after the

@@ -161,6 +161,20 @@ const stages = [
     check(snap.results.length === syntheticEasy, `expected ${syntheticEasy} results, got ${snap.results.length}`);
   }],
 
+  ['headless mock run — capability source', async () => {
+    const args = [CLI, 'run', '--headless', '--adapter', 'mock', '--source', 'capability', '--profile', 'capability-evaluation', '--trials', '1', '--output', tmp('mock-capability.json')];
+    const res = await node(args);
+    expectOk(res, 'mock run (capability)');
+    // The scripted mock implements the ideal response for every capability
+    // contract, so a healthy build must score a perfect 12/12.
+    expectContains(res, 'Success rate: 100.0%', 'mock run (capability)');
+    expectContains(res, 'Hard failures: none.', 'mock run (capability)');
+    const snap = await readSnapshot(tmp('mock-capability.json'));
+    check(snap.source === 'capability', `snapshot source is ${snap.source}`);
+    check(snap.results.length === 12, `expected 12 capability results, got ${snap.results.length}`);
+    check(snap.profile === 'capability-evaluation', `snapshot profile is ${snap.profile}`);
+  }],
+
   ['headless mock run — upstream source', async () => {
     if (!hasUpstream) {
       skipped.push('upstream mock run — vendor pack not synced (run `npm run sync:upstream` once)');
@@ -210,7 +224,7 @@ const stages = [
     check(mock.requests.length >= syntheticEasy, `expected >=${syntheticEasy} /api/chat requests, got ${mock.requests.length}`);
     const first = mock.requests[0].body;
     check(first.model === 'smoke-model', `model on wire: ${first.model}`);
-    check(JSON.stringify(first.options) === JSON.stringify({ temperature: 0, num_ctx: 8192, seed: 0 }), `options on wire: ${JSON.stringify(first.options)}`);
+    check(JSON.stringify(first.options) === JSON.stringify({ temperature: 0, num_ctx: 8192, seed: 0, num_predict: 1024 }), `options on wire: ${JSON.stringify(first.options)}`);
     check(first.keep_alive === '30m', `keep_alive on wire: ${first.keep_alive}`);
     check(['system', 'user'].includes(first.messages?.[0]?.role), `first message role: ${first.messages?.[0]?.role}`);
     const toolsWellFormed = Array.isArray(first.tools) && first.tools.length > 0
@@ -246,7 +260,7 @@ const stages = [
     check(toolMsg?.tool_name === 'get_weather', `tool_name missing on wire: ${JSON.stringify(toolMsg)}`);
     check(!('tool_call_id' in toolMsg), 'SDK must strip tool_call_id from the native wire');
     check(toolMsg.content === '{"temp":25}', `tool result content mangled on wire: ${JSON.stringify(toolMsg.content)}`);
-    check(JSON.stringify(body.options) === JSON.stringify({ temperature: 0, num_ctx: 8192, seed: 0 }), `options on wire: ${JSON.stringify(body.options)}`);
+    check(JSON.stringify(body.options) === JSON.stringify({ temperature: 0, num_ctx: 8192, seed: 0, num_predict: 1024 }), `options on wire: ${JSON.stringify(body.options)}`);
     check(body.keep_alive === '30m', `keep_alive on wire: ${body.keep_alive}`);
   }],
 

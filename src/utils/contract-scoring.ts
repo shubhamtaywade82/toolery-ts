@@ -58,6 +58,7 @@ function check(c: ScenarioCheck, calls: ToolCall[], text: string, trace: ChatMes
     case 'response_not_contains': return !checkResponseContains(c, text);
     case 'response_satisfies': return responseSatisfies(text, c);
     case 'response_matches_regex': return regexCheck(text, c);
+    case 'response_not_matches_regex': return regexAbsentCheck(text, c);
     case 'response_matches_schema': return schemaCheck(text, c.schema ?? {});
     case 'response_number': return numberCheck(text, c);
     case 'response_markdown_table': return markdownTableCheck(text, c);
@@ -179,6 +180,21 @@ function responseSatisfies(text: string, c: ScenarioCheck): boolean {
   const noneOf = Array.isArray(c.none_of) ? c.none_of : [];
   if (noneOf.length && noneOf.some((p) => patternFound(text, p))) return false;
   return allOf.length > 0 || anyOf.length > 0;
+}
+
+// True when NONE of the given patterns is found. The dual of regexCheck:
+// usable directly in `forbidden` lists, where a check must return true when
+// the situation is acceptable (violation = pattern present).
+function regexAbsentCheck(text: string, c: ScenarioCheck): boolean {
+  const patterns = (Array.isArray(c.none_of) ? c.none_of : [c.pattern ?? c.regex])
+    .filter((p): p is string => typeof p === 'string' && p.length > 0);
+  if (!patterns.length) return false;
+  try {
+    const flags = c.case_sensitive ? '' : 'i';
+    return patterns.every((p) => !compileRegex(p, flags).test(text));
+  } catch {
+    return false;
+  }
 }
 
 function regexCheck(text: string, c: ScenarioCheck): boolean {

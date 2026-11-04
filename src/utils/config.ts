@@ -6,7 +6,7 @@ import type {AdapterKind,BenchmarkConfig,ClusterTopology,ScenarioSource,Tier} fr
 const tiers:Array<Tier|'all'>=['easy','medium','hard','very-hard','all'];
 const adapters:AdapterKind[]=['raw','cloud','hermes','mock','openai-compatible','ollama'];
 const clusters:ClusterTopology[]=['single','dual','triple','quad','octa'];
-const sources:ScenarioSource[]=['synthetic','upstream'];
+const sources:ScenarioSource[]=['synthetic','upstream','capability'];
 
 /**
  * Resolve the directory holding the vendored upstream scenario pack.
@@ -64,7 +64,7 @@ export function parseConfig(flags:Record<string,unknown>):BenchmarkConfig{
   const cluster=String(flags.cluster??process.env.TOOLERY_CLUSTER??'single') as ClusterTopology;
   if(!clusters.includes(cluster))throw new Error(`Cluster must be ${clusters.join(', ')}.`);
   const source=String(flags.source??process.env.TOOLERY_SOURCE??detectScenarioSource()) as ScenarioSource;
-  if(!sources.includes(source))throw new Error('Source must be synthetic or upstream.');
+  if(!sources.includes(source))throw new Error('Source must be synthetic, upstream or capability.');
   const numCtxRaw=Number(flags.numCtx??process.env.TOOLERY_NUM_CTX??8192);
   if(!Number.isInteger(numCtxRaw)||numCtxRaw<512)throw new Error('numCtx must be an integer >= 512.');
   const keepAlive=flags.keepAlive?validateKeepAlive(String(flags.keepAlive)):(process.env.TOOLERY_KEEP_ALIVE!==undefined?validateKeepAlive(process.env.TOOLERY_KEEP_ALIVE):undefined);
