@@ -1,6 +1,6 @@
 export type Tier='easy'|'medium'|'hard'|'very-hard';
 export type AdapterKind='raw'|'cloud'|'hermes'|'mock'|'openai-compatible'|'ollama';
-export type ScenarioSource='synthetic'|'upstream';
+export type ScenarioSource='synthetic'|'upstream'|'capability';
 export interface JsonSchema{type:'object';properties?:Record<string,unknown>;required?:string[];additionalProperties?:boolean;[key:string]:unknown}
 export interface ToolDefinition{name:string;description:string;parameters:JsonSchema}
 export interface ToolCall{id?:string;name:string;arguments:Record<string,unknown>;result?:unknown;resultKind?:'text'|'json'|'error';index?:number;batch?:number;latencyMs?:number}

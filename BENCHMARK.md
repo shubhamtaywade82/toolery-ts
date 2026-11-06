@@ -2,7 +2,18 @@
 
 ## Version 1.0.0
 
-This release contains 143 deterministic scenario records split into 40 easy, 45 medium, 34 hard, and 24 very-hard cases.
+This release contains 143 deterministic scenario records split into 40 easy, 45 medium, 34 hard, and 24 very-hard cases, plus a dedicated 12-scenario capability-evaluation pack (`--source capability`, pack version 1.0.0) covering reasoning, instruction following, mathematical accuracy, coding, debugging, hallucination resistance, structured output, tool selection, multi-step tool execution, long-context retrieval and agentic planning.
+
+### Capability pack contract
+
+The capability pack (`cap-01` … `cap-12`) extends the core contract:
+
+- Every scenario carries a machine-checkable `scoring` contract (`required`, `forbidden`, `partial`) — success is contract-based, never similarity-based.
+- `forbidden` entries are checks that must HOLD: `tool_not_called`, `no_hallucinated_tool`, `response_not_matches_regex` (true when the bad pattern is absent).
+- Deterministic financial figures (cost totals, availability products, invoice totals) are verified against computed expected values.
+- Absent information must be reported as `null` (e.g. `api_version` in `cap-11`); inventing it trips a forbidden check.
+- Hard failures (unauthorized destructive calls, fabricated tool calls, invalid financial calculations, invented market data) are detected by `utils/hard-failures.ts` and reported separately from the capability score. A high score must not compensate for them.
+- The `capability-evaluation` profile maps the 100-point rubric onto the 18-dimension matrix as reporting multipliers.
 
 ### Contract
 

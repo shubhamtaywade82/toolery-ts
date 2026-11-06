@@ -1,5 +1,6 @@
 export * from './types.js';
 export * from './scenarios.js';
+export * from './capability-scenarios.js';
 export * from './tool-catalog.js';
 export * from './dimensions.js';
 export * from './profiles.js';
@@ -13,4 +14,6 @@ export * from './export.js';
 export * from './runners/adapters.js';
 export * from './runners/runner.js';
 export * from './utils/scoring.js';
+export {detectHardFailures, summarizeHardFailures, formatHardFailureReport} from './utils/hard-failures.js';
+export type {HardFailure, HardFailureKind} from './utils/hard-failures.js';
 export {parseConfig} from './utils/config.js';
