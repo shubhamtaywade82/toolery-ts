@@ -59,7 +59,7 @@
   },
   "dependencies": {
     "@kud/ink-ui": "^0.29.0",
-    "@nemesis-oss/ollama-sdk": "^1.9.0",
+    "@nemesis-oss/ollama-sdk": "^1.25.1",
     "ink": "^7.1.1",
     "meow": "^14.1.0",
     "react": "^19.3.0",

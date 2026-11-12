@@ -1,4 +1,4 @@
-import type {BenchmarkSummary,CapabilityScores,ExpectedToolCall,Scenario,TextScore,ToolCall,ToolCallScore} from '../types.js';
+import type {BenchmarkSummary,CapabilityScores,ExpectedToolCall,Scenario,TextScore,ToolCall,ToolCallScore,HarnessStatus} from '../types.js';
 import {DIMENSIONS} from '../dimensions.js';
 const CAPS=Object.keys({coding:0,debugging:0,agenticPlanning:0,safety:0,adversarialRobustness:0,restraint:0,errorRecovery:0,parameterPrecision:0,stateTracking:0,structuredOutput:0,toolSelection:0,instructionFollowing:0,longContext:0,localization:0,budgetDiscipline:0,terminalHandling:0,calibration:0,correctness:0}) as Array<keyof CapabilityScores>;
 function stable(v:unknown):string{if(v===null||typeof v!=='object')return JSON.stringify(v);if(Array.isArray(v))return`[${v.map(stable).join(',')}]`;const o=v as Record<string,unknown>;return`{${Object.keys(o).sort().map(k=>`${JSON.stringify(k)}:${stable(o[k])}`).join(',')}}`;}
@@ -8,4 +8,17 @@ export function scoreText(expected:string|undefined,actual:string):TextScore{if(
 export function capabilityScores(scenario:Scenario,tool:ToolCallScore,text:TextScore,actualCount:number):CapabilityScores{const base:CapabilityScores={coding:tool.f1,debugging:tool.f1,agenticPlanning:tool.f1,safety:text.similarity,adversarialRobustness:tool.f1,restraint:actualCount<=scenario.expectedToolCalls.length?1:Math.max(0,scenario.expectedToolCalls.length/Math.max(actualCount,1)),errorRecovery:tool.recall,parameterPrecision:tool.argumentAccuracy,stateTracking:tool.f1,structuredOutput:text.similarity,toolSelection:tool.f1,instructionFollowing:text.similarity,longContext:tool.f1,localization:tool.argumentAccuracy,budgetDiscipline:restraintBudget(scenario,actualCount),terminalHandling:tool.f1,calibration:text.similarity,correctness:(tool.f1+text.similarity)/2};
   const active=new Set(scenario.capabilities as string[]);for(const dim of DIMENSIONS){if(!active.has(dim))base[dim]=Math.max(0,base[dim]);}return base;}
 function restraintBudget(scenario:Scenario,count:number):number{const max=scenario.budget?.maxToolCalls;return max===undefined?1:count<=max?1:Math.max(0,max/Math.max(1,count));}
-export function aggregateSummary(results:{success:boolean;durationMs:number;scores:CapabilityScores}[],scenarioCount:number,profile:string,benchmarkVersion:string):BenchmarkSummary{const trials=results.length,passedTrials=results.filter(r=>r.success).length;const capabilityScores=Object.fromEntries(CAPS.map(cap=>[cap,trials?results.reduce((s,r)=>s+r.scores[cap],0)/trials:0])) as unknown as CapabilityScores;return{benchmarkVersion,scenarios:scenarioCount,trials,passedTrials,successRate:trials?passedTrials/trials:0,averageDurationMs:trials?results.reduce((s,r)=>s+r.durationMs,0)/trials:0,capabilityScores,profile};}
+/**
+ * Summarises trials. Trials the harness could not score (a budget refusal, an unknown provider outcome, a duplicate
+ * key) are excluded from the pass rate and the capability averages, and counted separately by status, so a refused
+ * call never lowers a model's score (T-3). `trials` counts the scored trials only.
+ */
+export function aggregateSummary(results:{success:boolean;durationMs:number;scores:CapabilityScores;harnessStatus?:HarnessStatus}[],scenarioCount:number,profile:string,benchmarkVersion:string):BenchmarkSummary{
+  const scored=results.filter(r=>r.harnessStatus===undefined);
+  const excluded=results.filter(r=>r.harnessStatus!==undefined);
+  const trials=scored.length,passedTrials=scored.filter(r=>r.success).length;
+  const capabilityScores=Object.fromEntries(CAPS.map(cap=>[cap,trials?scored.reduce((s,r)=>s+r.scores[cap],0)/trials:0])) as unknown as CapabilityScores;
+  const harnessByStatus:Partial<Record<HarnessStatus,number>>={};
+  for(const r of excluded){const status=r.harnessStatus as HarnessStatus;harnessByStatus[status]=(harnessByStatus[status]??0)+1;}
+  return{benchmarkVersion,scenarios:scenarioCount,trials,passedTrials,successRate:trials?passedTrials/trials:0,averageDurationMs:results.length?results.reduce((s,r)=>s+r.durationMs,0)/results.length:0,capabilityScores,profile,harnessExcluded:excluded.length,harnessByStatus};
+}

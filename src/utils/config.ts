@@ -2,9 +2,13 @@ import {existsSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import type {AdapterKind,BenchmarkConfig,ClusterTopology,ScenarioSource,Tier} from '../types.js';
+import {NEXUM_ROUTING_VERSION} from '../runners/nexum-adapter.js';
+
+/** Cloud-routed adapters share the provider's concurrency budget, so they are capped (T-4). */
+export const CLOUD_CONCURRENCY_CAP=3;
 
 const tiers:Array<Tier|'all'>=['easy','medium','hard','very-hard','all'];
-const adapters:AdapterKind[]=['raw','cloud','hermes','mock','openai-compatible','ollama'];
+const adapters:AdapterKind[]=['raw','cloud','hermes','mock','openai-compatible','ollama','nexum'];
 const clusters:ClusterTopology[]=['single','dual','triple','quad','octa'];
 const sources:ScenarioSource[]=['synthetic','upstream','capability'];
 
@@ -59,6 +63,7 @@ export function parseConfig(flags:Record<string,unknown>):BenchmarkConfig{
   if(!adapters.includes(adapter))throw new Error(`Adapter must be ${adapters.join(', ')}.`);
   const concurrency=Number(flags.concurrency??process.env.TOOLERY_CONCURRENCY??1);
   if(!Number.isInteger(concurrency)||concurrency<1||concurrency>32)throw new Error('Concurrency must be an integer between 1 and 32.');
+  if((adapter==='cloud'||adapter==='nexum')&&concurrency>CLOUD_CONCURRENCY_CAP)throw new Error(`Concurrency for the ${adapter} adapter is capped at ${CLOUD_CONCURRENCY_CAP}.`);
   const timeoutMs=Number(flags.timeout??process.env.TOOLERY_TIMEOUT_MS??180_000);
   if(!Number.isFinite(timeoutMs)||timeoutMs<100)throw new Error('Timeout must be at least 100 ms.');
   const cluster=String(flags.cluster??process.env.TOOLERY_CLUSTER??'single') as ClusterTopology;
@@ -71,7 +76,7 @@ export function parseConfig(flags:Record<string,unknown>):BenchmarkConfig{
   return{
     model:String(flags.model??process.env.TOOLERY_MODEL??(adapter==='mock'?'mock':'')),
     adapter,tier,trials,
-    baseUrl:String(flags.baseUrl??process.env.TOOLERY_BASE_URL??(adapter==='ollama'?'http://localhost:11434':'http://localhost:11434/v1')),
+    baseUrl:String(flags.baseUrl??process.env.TOOLERY_BASE_URL??(adapter==='ollama'?'http://localhost:11434':adapter==='nexum'?'http://127.0.0.1:3777':'http://localhost:11434/v1')),
     apiKey:flags.apiKey?String(flags.apiKey):process.env.TOOLERY_API_KEY,
     timeoutMs,concurrency,
     profile:String(flags.profile??process.env.TOOLERY_PROFILE??'default'),
@@ -84,5 +89,6 @@ export function parseConfig(flags:Record<string,unknown>):BenchmarkConfig{
     source,
     numCtx:numCtxRaw,
     keepAlive,
+    routingVersion:adapter==='nexum'?NEXUM_ROUTING_VERSION:undefined,
   };
 }

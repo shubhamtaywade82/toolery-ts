@@ -3,14 +3,16 @@ import type {BenchmarkSummary, RunResult} from './types.js';
 
 export async function exportJson(path:string, payload: unknown): Promise<void> { await writeFile(path, JSON.stringify(payload, null, 2)); }
 
-function csvEscape(value: unknown): string { const text = typeof value === 'string' ? value : JSON.stringify(value); return `"${text.replaceAll('"','""')}"`; }
+/** An unreported figure is an empty cell, never 0 and never the text "undefined" (T-2). */
+function csvEscape(value: unknown): string { if(value===undefined||value===null)return ''; const text = typeof value === 'string' ? value : JSON.stringify(value); return `"${text.replaceAll('"','""')}"`; }
 
 export async function exportCsv(path:string, results:RunResult[]):Promise<void> {
-  const headers=['scenarioId','tier','successRate','averageDurationMs','trial','success','toolPrecision','toolRecall','toolF1','argumentAccuracy','textSimilarity'];
+  const headers=['scenarioId','tier','successRate','averageDurationMs','trial','success','toolPrecision','toolRecall','toolF1','argumentAccuracy','textSimilarity','inputTokens','outputTokens','cachedInputTokens','costUsd','costSource','routedModel','harnessStatus'];
   const rows=[headers.join(',')];
   for(const result of results) for(const trial of result.trials) rows.push([
     result.scenarioId,result.tier,result.successRate,result.averageDurationMs,trial.trial,trial.success,
     trial.toolCallScore.precision,trial.toolCallScore.recall,trial.toolCallScore.f1,trial.toolCallScore.argumentAccuracy,trial.textScore.similarity,
+    trial.inputTokens,trial.outputTokens,trial.cachedInputTokens,trial.costUsd,trial.costSource,trial.routedModel,trial.harnessStatus,
   ].map(csvEscape).join(','));
   await writeFile(path, rows.join('\n')+'\n');
 }
